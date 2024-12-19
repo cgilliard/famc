@@ -1,0 +1,89 @@
+Setup: V V V
+(0.00 s) Setup: DONE
+Target Load: V V V
+(0.00 s) Target Load: DONE
+Parse: V V V
+(0.23 s) Parse: DONE
+LoadCrates: V V V
+(0.00 s) LoadCrates: DONE
+Expand: V V V
+(0.40 s) Expand: DONE
+Implicit Crates: V V V
+(0.00 s) Implicit Crates: DONE
+Resolve Use: V V V
+(0.01 s) Resolve Use: DONE
+Resolve Index: V V V
+(0.01 s) Resolve Index: DONE
+Resolve Absolute: V V V
+(0.04 s) Resolve Absolute: DONE
+HIR Lower: V V V
+(0.08 s) HIR Lower: DONE
+Lifetime Elision: V V V
+(0.02 s) Lifetime Elision: DONE
+Resolve Type Aliases: V V V
+(0.01 s) Resolve Type Aliases: DONE
+Resolve Bind: V V V
+(0.04 s) Resolve Bind: DONE
+Resolve UFCS Outer: V V V
+(0.02 s) Resolve UFCS Outer: DONE
+Resolve HIR Self Type: V V V
+(0.01 s) Resolve HIR Self Type: DONE
+Resolve HIR Markings: V V V
+(0.01 s) Resolve HIR Markings: DONE
+Sort Impls: V V V
+(0.00 s) Sort Impls: DONE
+Resolve UFCS paths: V V V
+(0.08 s) Resolve UFCS paths: DONE
+Constant Evaluate: V V V
+(0.35 s) Constant Evaluate: DONE
+Typecheck Outer: V V V
+(0.13 s) Typecheck Outer: DONE
+Typecheck Expressions: V V V
+(0.97 s) Typecheck Expressions: DONE
+Expand HIR Annotate: V V V
+(0.03 s) Expand HIR Annotate: DONE
+Expand HIR Static Borrow Mark: V V V
+(0.02 s) Expand HIR Static Borrow Mark: DONE
+Expand HIR Lifetimes: V V V
+(0.32 s) Expand HIR Lifetimes: DONE
+Expand HIR Closures: V V V
+(0.08 s) Expand HIR Closures: DONE
+Expand HIR Static Borrow: V V V
+(0.03 s) Expand HIR Static Borrow: DONE
+Expand HIR VTables: V V V
+(0.01 s) Expand HIR VTables: DONE
+Expand HIR Calls: V V V
+(0.02 s) Expand HIR Calls: DONE
+Expand HIR Reborrows: V V V
+(0.02 s) Expand HIR Reborrows: DONE
+Expand HIR ErasedType: V V V
+(0.06 s) Expand HIR ErasedType: DONE
+Typecheck Expressions (validate): V V V
+(0.21 s) Typecheck Expressions (validate): DONE
+Lower MIR: V V V
+(0.28 s) Lower MIR: DONE
+MIR Validate: V V V
+(0.14 s) MIR Validate: DONE
+MIR Cleanup: V V V
+(0.17 s) MIR Cleanup: DONE
+MIR Optimise: V V V
+(0.81 s) MIR Optimise: DONE
+MIR Validate PO: V V V
+(0.06 s) MIR Validate PO: DONE
+MIR Validate Full: V V V
+(0.00 s) MIR Validate Full: DONE
+Trans Enumerate: V V V
+(0.21 s) Trans Enumerate: DONE
+Trans Auto Impls: V V V
+(0.00 s) Trans Auto Impls: DONE
+Trans Monomorph: V V V
+(0.15 s) Trans Monomorph: DONE
+MIR Optimise Inline: V V V
+(0.20 s) MIR Optimise Inline: DONE
+Trans Enumerate Cleanup: V V V
+(0.00 s) Trans Enumerate Cleanup: DONE
+HIR Serialise: V V V
+(0.34 s) HIR Serialise: DONE
+Trans Codegen: V V V
+Running command - "gcc" @"output/libcore.rlib_cmd.txt"
+(0.27 s) Trans Codegen: DONE
