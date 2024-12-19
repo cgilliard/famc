@@ -1,2 +1,4 @@
 .obj
 .temp.txt
+bin/
+rustc-1.29.0*

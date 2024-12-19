@@ -1,1 +1,0 @@
-"-Wno-psabi" "-O1" "-fno-tree-sra" "-fPIC" "-o" "output/libcore.rlib.o" "output/libcore.rlib.c" "-c" 
