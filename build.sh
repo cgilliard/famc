@@ -1,8 +1,8 @@
 #!/bin/sh
 
-
-if [ ! -d rustc-1.29.0-src ]; then
-  curl -s https://static.rust-lang.org/dist/rustc-1.29.0-src.tar.gz | tar -xzf -
+RUSTC_SRC="rustc-`cat rust-version`-src";
+if [ ! -d ${RUSTC_SRC} ]; then
+  curl -s https://static.rust-lang.org/dist/${RUSTC_SRC}.tar.gz | tar -xzf -
 fi
 
 make bin/mrustc
