@@ -2,4 +2,3 @@
 .temp.txt
 bin/
 output/
-rustc-*-src/
