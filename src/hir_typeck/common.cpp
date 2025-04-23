@@ -626,7 +626,7 @@ struct CloneTyWith_Monomorph: Monomorphiser {
         return HIR::LifetimeRef(g.binding);
     }
 
-    ::HIR::TypeRef monomorph_type(const Span& sp, const ::HIR::TypeRef& ty, bool allow_infer=true) const {
+    ::HIR::TypeRef monomorph_type(const Span& sp, const ::HIR::TypeRef& ty, bool allow_infer=true) const override {
         ::HIR::TypeRef  rv;
 
         if( callback(ty, rv) ) {
