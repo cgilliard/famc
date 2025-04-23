@@ -35,7 +35,6 @@ namespace static_borrow_constants {
         public ::HIR::ExprVisitorDef
     {
         const StaticTraitResolve& m_resolve;
-        const ::HIR::TypeRef*   m_self_type;
         const ::HIR::ExprPtr& m_expr_ptr;
 
         HIR::SimplePath m_lang_RangeFull;
@@ -47,7 +46,6 @@ namespace static_borrow_constants {
     public:
         ExprVisitor_Mark(const StaticTraitResolve& resolve, const ::HIR::TypeRef* self_type, const ::HIR::ExprPtr& expr_ptr)
             :m_resolve(resolve)
-            ,m_self_type(self_type)
             ,m_expr_ptr(expr_ptr)
             ,m_is_constant(false)
             ,m_all_constant(false)
