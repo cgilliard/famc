@@ -16,7 +16,7 @@ namespace {
         public ExpandDecorator
     {
     public:
-        virtual void handle(const AST::Attribute& mi, AST::Function& fcn) const = 0;
+        virtual void handle_function(const AST::Attribute& mi, AST::Function& fcn) const = 0;
 
         AttrStage   stage() const override { return AttrStage::Pre; }
 
@@ -24,7 +24,7 @@ namespace {
             if( i.is_None() ) {
             }
             else if( i.is_Function() ) {
-                this->handle(mi, i.as_Function());
+                this->handle_function(mi, i.as_Function());
             }
             else {
                 // TODO: Error
@@ -34,7 +34,7 @@ namespace {
             if( i.is_None() ) {
             }
             else if( i.is_Function() ) {
-                this->handle(mi, i.as_Function());
+                this->handle_function(mi, i.as_Function());
             }
             else {
                 // TODO: Error
@@ -44,7 +44,7 @@ namespace {
             if( i.is_None() ) {
             }
             else if( i.is_Function() ) {
-                this->handle(mi, i.as_Function());
+                this->handle_function(mi, i.as_Function());
             }
             else {
                 // TODO: Error
@@ -57,7 +57,7 @@ class CHandler_Inline:
     public Common_Function
 {
 public:
-    void handle(const AST::Attribute& mi, AST::Function& fcn) const override {
+    void handle_function(const AST::Attribute& mi, AST::Function& fcn) const override {
         TTStream    lex(mi.span(), ParseState(), mi.data());
         //ASSERT_BUG(mi.span(), fcn.m_markings.inline_type == AST::Function::Markings::Inline::Auto, "Duplicate #[inline] attributes");
         if( lex.getTokenIf(TOK_PAREN_OPEN) )
@@ -86,7 +86,7 @@ class CHandler_Cold:
     public Common_Function
 {
 public:
-    void handle(const AST::Attribute& mi, AST::Function& fcn) const override {
+    void handle_function(const AST::Attribute& mi, AST::Function& fcn) const override {
         TTStream    lex(mi.span(), ParseState(), mi.data());
         lex.getTokenCheck(TOK_EOF);
         //ASSERT_BUG(mi.span(), !fcn.m_markings.is_cold, "Duplicate #[cold] attributes");
@@ -98,7 +98,7 @@ STATIC_DECORATOR("cold", CHandler_Cold);
 class CHandler_rustc_legacy_const_generics:
     public Common_Function
 {
-    void handle(const AST::Attribute& mi, AST::Function& fcn) const override {
+    void handle_function(const AST::Attribute& mi, AST::Function& fcn) const override {
         TTStream    lex(mi.span(), ParseState(), mi.data());
         lex.getTokenCheck(TOK_PAREN_OPEN);
 
@@ -122,7 +122,7 @@ class CHandler_Repr:
 {
     AttrStage   stage() const override { return AttrStage::Pre; }
 
-    void handle(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item&i) const override {
+    void handle_function(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module& mod, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item&i) const {
         if(i.is_None())
         {
         }
