@@ -669,7 +669,6 @@ namespace {
         public ::HIR::ExprVisitorDef
     {
         const StaticTraitResolve& m_resolve;
-        const ::HIR::TypeRef*   m_self_type;
         const ::std::vector< ::HIR::TypeRef>& m_variable_types;
         const ::HIR::ExprPtr& m_expr_ptr;
 
@@ -680,7 +679,6 @@ namespace {
     public:
         ExprVisitor_Extract(const StaticTraitResolve& resolve, const ::HIR::TypeRef* self_type, const ::std::vector< ::HIR::TypeRef>& var_types, const ::HIR::ExprPtr& expr_ptr, OutState& out, const char* new_type_suffix):
             m_resolve(resolve),
-            m_self_type(self_type),
             m_variable_types(var_types),
             m_expr_ptr(expr_ptr),
             m_out(out),
@@ -1529,14 +1527,12 @@ namespace {
                 public ::HIR::ExprVisitorDef
             {
                 const Monomorph& m_monomorph;
-                const ::HIR::TypeRef&   m_self_arg_type;
                 const std::map<unsigned, unsigned>&   m_variable_rewrites;
 
                 ::HIR::ExprNodeP    m_replacement;
             public:
                 ExprVisitor_GeneratorRewrite(const Monomorph& monomorph, const ::HIR::TypeRef& self_arg_type, const std::map<unsigned, unsigned>& rewrites)
                     : m_monomorph(monomorph)
-                    , m_self_arg_type(self_arg_type)
                     , m_variable_rewrites(rewrites)
                 {
                 }
