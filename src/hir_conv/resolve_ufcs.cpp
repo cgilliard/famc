@@ -277,7 +277,7 @@ class Visitor : public ::HIR::Visitor {
 			}
 
 			void visit_node_ptr(
-			    ::std::unique_ptr<::HIR::ExprNode>& node_ptr) {
+			    ::std::unique_ptr<::HIR::ExprNode>& node_ptr) override {
 				::HIR::ExprVisitorDef::visit_node_ptr(node_ptr);
 				if (m_replacement) {
 					m_replacement.swap(node_ptr);

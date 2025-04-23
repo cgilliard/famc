@@ -670,7 +670,7 @@ namespace static_borrow_constants {
                 ASSERT_BUG(sp, i < params.m_types.size(), "Item generic type binding OOR - " << ge << " (" << i << " !< " << params.m_types.size() << ")");
                 return ::HIR::TypeRef(params.m_types[i].m_name, 256 + i);
             }
-            ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& ge) const {
+            ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& ge) const override {
                 unsigned i;
                 if( ge.binding == 0xFFFF ) {
                     BUG(sp, "Binding 0xFFFF isn't valid for values");
@@ -981,7 +981,7 @@ namespace static_borrow_constants {
                 value_ptr = mv$(new_node);
             }
         }
-        void visit(::HIR::ExprNode_ConstBlock& node) {
+        void visit(::HIR::ExprNode_ConstBlock& node) override {
             HIR::ExprVisitorDef::visit(node);
 
             if( dynamic_cast<HIR::ExprNode_PathValue*>(node.m_inner.get()) ) {
