@@ -58,13 +58,11 @@ namespace {
         class V:
             public ::HIR::Visitor
         {
-            const Span& sp;
             const StaticTraitResolve&  m_resolve;
             bool clear_opaque;
         public:
             V(const Span& sp, const StaticTraitResolve& resolve)
-                : sp(sp)
-                , m_resolve(resolve)
+                : m_resolve(resolve)
                 , clear_opaque(false)
             {}
 
