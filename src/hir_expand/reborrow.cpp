@@ -21,7 +21,7 @@ namespace {
     class ExprVisitor_Mutate:
         public ::HIR::ExprVisitorDef
     {
-        const ::HIR::Crate& m_crate;
+          [[maybe_unused]]  const ::HIR::Crate& m_crate;
 
     public:
         ExprVisitor_Mutate(const ::HIR::Crate& crate):

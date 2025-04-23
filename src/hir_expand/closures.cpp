@@ -93,7 +93,7 @@ namespace {
 
     void OutState::push_new_impls(const Span& sp, ::HIR::Crate& crate)
     {
-        auto check_state = [&crate](::HIR::TraitImpl& ti) {
+        auto check_state = [](::HIR::TraitImpl& ti) {
             for(auto& m : ti.m_methods) {
                 ASSERT_BUG(Span(), m.second.data.m_code.m_state, "Missing expression state on " << ti.m_type << " :: " << m.first);
             }
