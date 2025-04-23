@@ -226,7 +226,7 @@ namespace {
             }
         }
         void write_lvalue(const ::MIR::TypeResolve& state, const MIR::LValue& lv) {
-            check_inner_state(state, lv, [&](const ValState vs){ return vs != ValState::Shared || vs != ValState::Frozen; });
+            check_inner_state(state, lv, [&](const ValState vs){ return true; });
             set_state(state, lv, ValState::FullInit);
         }
         void borrow_lvalue(const ::MIR::TypeResolve& state, ::HIR::BorrowType bt, const MIR::LValue& lv) {

@@ -937,12 +937,6 @@ bool StaticTraitResolve::find_impl__check_crate_raw(
 
         size_t n_placeholder_tys_needed = ::std::count(params_set.m_types.begin(), params_set.m_types.end(), false);
         size_t n_placeholder_vals_needed = ::std::count(params_set.m_values.begin(), params_set.m_values.end(), false);
-        size_t n_placeholder_lfts_needed = 0;
-        for(unsigned int i = 0; i < impl_params.m_lifetimes.size(); i ++ ) {
-            if( !params_set.m_lifetimes[i] ) {
-                n_placeholder_lfts_needed ++;
-            }
-        }
 #if 0
         ASSERT_BUG(sp, base_impl_placeholder_idx.ty  + n_placeholder_tys_needed  <= 256, "Out of impl placeholder types");
         ASSERT_BUG(sp, base_impl_placeholder_idx.lft + n_placeholder_lfts_needed <= 256, "Out of impl placeholder lifetimes");

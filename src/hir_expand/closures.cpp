@@ -744,7 +744,7 @@ namespace {
                 }
                 return ::HIR::TypeRef(params.m_types[rv].m_name, rv);
             }
-            ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& ge) const {
+            ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& ge) const override {
                 size_t rv = SIZE_MAX;
                 for(size_t i = 0; i < constructor_path_params.m_values.size(); i++) {
                     const auto& v = constructor_path_params.m_values[i];

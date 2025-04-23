@@ -16,9 +16,6 @@ namespace
     inline ::HIR::SimplePath get_parent_path(const ::HIR::SimplePath& sp) {
         return sp.parent();
     }
-    inline ::HIR::GenericPath get_parent_path(const ::HIR::GenericPath& gp) {
-        return ::HIR::GenericPath( gp.m_path.parent(), gp.m_params.clone() );
-    }
 }
 
 namespace typecheck
@@ -1794,7 +1791,6 @@ namespace typecheck
                     } break;
                 case ::HIR::ExprNode_PathValue::STRUCT_CONSTR: {
                     const auto& s = this->context.m_crate.get_struct_by_path(sp, e.m_path);
-                    const auto& se = s.m_data.as_Tuple();
                     fix_param_count(sp, this->context, ::HIR::TypeRef(), false, e, s.m_params, e.m_params);
 
                     auto ms = MonomorphStatePtr(nullptr, &e.m_params, nullptr);
@@ -1811,9 +1807,6 @@ namespace typecheck
                     size_t idx = enm.find_variant(var_name);
                     ASSERT_BUG(sp, idx != SIZE_MAX, "Missing variant - " << e.m_path);
                     ASSERT_BUG(sp, enm.m_data.is_Data(), "Enum " << enum_path << " isn't a data-holding enum");
-                    const auto& var_ty = enm.m_data.as_Data()[idx].type;
-                    const auto& str = *var_ty.data().as_Path().binding.as_Struct();
-                    const auto& var_data = str.m_data.as_Tuple();
 
                     auto ms = MonomorphStatePtr(nullptr, &e.m_params, nullptr);
                     //apply_bounds_as_rules(this->context, sp, enm.m_params, monomorph_cb, /*is_impl_level=*/true);
