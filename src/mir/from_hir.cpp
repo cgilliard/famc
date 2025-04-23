@@ -49,6 +49,8 @@ namespace {
     {
         MirBuilder& m_builder;
 
+        const ::std::vector< ::HIR::TypeRef>&  m_variable_types;
+
         /// Generators do some different codegen quirks
         bool    m_is_generator;
 
@@ -87,6 +89,7 @@ namespace {
     public:
         ExprVisitor_Conv(MirBuilder& builder, const ::std::vector< ::HIR::TypeRef>& var_types, const ::HIR::ExprNode_GeneratorWrapper* is_generator):
             m_builder(builder),
+            m_variable_types(var_types),
             m_is_generator(is_generator != nullptr)
         {
             if(m_is_generator)

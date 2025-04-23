@@ -200,6 +200,7 @@ namespace MIR { namespace eval {
         void set(uintptr_t ptr, Tag tag) {
             assert(this->ptr == 0);
             assert( (ptr & 3) == 0 );
+            assert( tag < 4 );
             this->ptr = ptr | tag;
         }
     };
@@ -240,14 +241,14 @@ namespace MIR { namespace eval {
             }
         }
 
-        size_t size() const override { return length; }
+        size_t size() const { return length; }
         const uint8_t* get_bytes(size_t ofs, size_t len, bool /*check_mask*/) const override
         {
             if( !(ofs <= length) || !(len <= length) || !(ofs+len <= length) )
                 return nullptr;
             return data + ofs;
         }
-        void read_mask(uint8_t* dst, size_t dst_ofs, size_t /*ofs*/, size_t len) const override {
+        void read_mask(uint8_t* dst, size_t dst_ofs, size_t /*ofs*/, size_t len) const {
             dst += dst_ofs / 8;
             dst_ofs %= 8;
             if( dst_ofs != 0 )
@@ -343,7 +344,7 @@ namespace MIR { namespace eval {
 
             return this->data + ofs;
         }
-        void read_mask(uint8_t* dst, size_t dst_ofs, size_t ofs, size_t len) const override {
+        void read_mask(uint8_t* dst, size_t dst_ofs, size_t ofs, size_t len) const {
             assert(ofs <= length);
             assert(len <= length);
             assert(ofs+len <= length);
@@ -469,7 +470,7 @@ namespace MIR { namespace eval {
             }
         }
 
-        size_t size() const override { return m_encoded ? m_encoded->bytes.size() : 0; }
+        size_t size() const { return m_encoded ? m_encoded->bytes.size() : 0; }
         const uint8_t* get_bytes(size_t ofs, size_t len, bool check_mask) const override {
             if(m_encoded) {
                 assert(ofs <= m_encoded->bytes.size());

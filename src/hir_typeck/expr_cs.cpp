@@ -28,38 +28,38 @@ namespace {
     }
 
     bool type_contains_impl_placeholder(const ::HIR::TypeRef& t) {
-      struct HasPlaceholder {};
-      struct V: public HIR::Visitor {
-        void visit_constgeneric_const(const HIR::ConstGeneric& v) {
-            if( v.is_Generic() && v.as_Generic().is_placeholder() ) {
-                throw HasPlaceholder {};
-            }
-        }
-        void visit_path_params(HIR::PathParams& pp) override {
-            for(const auto& v : pp.m_values) {
-                visit_constgeneric_const(v);
-            }
-            HIR::Visitor::visit_path_params(pp);
-        }
-        void visit_type(HIR::TypeRef& ty) override {
-            if( ty.data().is_Generic() && ty.data().as_Generic().is_placeholder() ) {
-                throw HasPlaceholder {};
-            }
-            if(const auto* e = ty.data().opt_Array() ) {
-                if( const auto* ase = e->size.opt_Unevaluated() ) {
-                    visit_constgeneric_const(*ase);
+        struct HasPlaceholder {};
+        struct V: public HIR::Visitor {
+            void visit_constgeneric(const HIR::ConstGeneric& v) {
+                if( v.is_Generic() && v.as_Generic().is_placeholder() ) {
+                    throw HasPlaceholder {};
                 }
             }
-            HIR::Visitor::visit_type(ty);
+            void visit_path_params(HIR::PathParams& pp) override {
+                for(const auto& v : pp.m_values) {
+                    visit_constgeneric(v);
+                }
+                HIR::Visitor::visit_path_params(pp);
+            }
+            void visit_type(HIR::TypeRef& ty) override {
+                if( ty.data().is_Generic() && ty.data().as_Generic().is_placeholder() ) {
+                    throw HasPlaceholder {};
+                }
+                if(const auto* e = ty.data().opt_Array() ) {
+                    if( const auto* ase = e->size.opt_Unevaluated() ) {
+                        visit_constgeneric(*ase);
+                    }
+                }
+                HIR::Visitor::visit_type(ty);
+            }
+        } v;
+        try {
+            v.visit_type(const_cast<HIR::TypeRef&>(t));
+            return false;
         }
-      } v;
-      try {
-         v.visit_type(const_cast<HIR::TypeRef&>(t));
-         return false;
-      }
-      catch(const HasPlaceholder& ) {
-        return true;
-      }
+        catch(const HasPlaceholder& ) {
+            return true;
+        }
     }
 
     struct MonomorphEraseHrls: public Monomorphiser {

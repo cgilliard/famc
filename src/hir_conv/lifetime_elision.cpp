@@ -40,6 +40,7 @@ namespace
     class Visitor:
         public ::HIR::Visitor
     {
+        ::HIR::Crate& crate;
         MiniResolve  m_resolve;
 
         bool m_in_expr = false;
@@ -53,8 +54,8 @@ namespace
 
     public:
         Visitor(::HIR::Crate& crate)
-            :
-             m_resolve(crate)
+            : crate(crate)
+            , m_resolve(crate)
         {
         }
 

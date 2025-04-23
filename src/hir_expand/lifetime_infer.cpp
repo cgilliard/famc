@@ -457,6 +457,7 @@ namespace {
     {
         friend struct LocalTraitResolve;
         const StaticTraitResolve&   m_resolve;
+        const ::HIR::Function::args_t&  m_args;
         const HIR::TypeRef& m_real_ret_type;
         HIR::TypeRef m_ret_ty;
         bool remove_locals;
@@ -471,6 +472,7 @@ namespace {
     public:
         ExprVisitor_Enumerate(const StaticTraitResolve& resolve, const ::HIR::Function::args_t& args, const HIR::TypeRef& ret_ty, bool remove_locals, LifetimeInferState& state)
             : m_resolve(resolve)
+            , m_args(args)
             , m_real_ret_type(ret_ty)
             , remove_locals(remove_locals)
             , m_state(state)

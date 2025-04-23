@@ -3758,7 +3758,7 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
                         return v;
                     }
                     static S128 sext(U128 v, unsigned bits) {
-                        if( (v >> (bits-1)) != 0 ) {
+                        if( v >> (bits-1) != 0 ) {
                             return S128(v | (U128::max() << bits));
                         }
                         else {

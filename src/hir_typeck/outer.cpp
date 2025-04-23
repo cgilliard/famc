@@ -1074,6 +1074,9 @@ namespace {
                     if(!vi.is_Constant()) {
                         ERROR(sp, E0000, "Trait " << trait_path << " doesn't have a constant named " << e.first);
                     }
+                    const auto& impl_const = e.second.data;
+                    const auto& trait_const = vi.as_Constant();
+
                     // Check type
                 }
                 for(const auto& e : impl.m_statics)
@@ -1082,8 +1085,17 @@ namespace {
                     if(!vi.is_Static()) {
                         ERROR(sp, E0000, "Trait " << trait_path << " doesn't have a static named " << e.first);
                     }
+                    const auto& impl_static = e.second.data;
+                    const auto& trait_static = vi.as_Static();
 
                     // Check type
+                }
+                for(const auto& e : trait.m_types)
+                {
+                    const auto& trait_type = trait.m_types.at(e.first);
+                    const auto& impl_type = e.second;
+
+                    // Check that the bounds fit
                 }
             }
         }

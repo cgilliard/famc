@@ -17,6 +17,7 @@ namespace {
 class Visitor:
     public ::HIR::Visitor
 {
+    const ::HIR::Crate& m_crate;
     const ::HIR::SimplePath&    m_lang_Unsize;
     const ::HIR::SimplePath&    m_lang_CoerceUnsized;
     const ::HIR::SimplePath&    m_lang_Copy;
@@ -25,6 +26,7 @@ class Visitor:
     const ::HIR::SimplePath&    m_lang_PhantomData;
 public:
     Visitor(const ::HIR::Crate& crate):
+        m_crate(crate),
         m_lang_Unsize( crate.get_lang_item_path_opt("unsize") ),
         m_lang_CoerceUnsized( crate.get_lang_item_path_opt("coerce_unsized") ),
         m_lang_Copy( crate.get_lang_item_path_opt("copy") ),
