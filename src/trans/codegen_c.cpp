@@ -1297,7 +1297,7 @@ namespace {
                 // HACK: Work around [https://gcc.gnu.org/bugzilla/show_bug.cgi?id=117423] by disabling an optimisation stage
                 if( opt.opt_level > 0 )
                 {
-                    args.push_back("-fno-tree-sra");
+                    /*args.push_back("-fno-tree-sra");*/
                 }
                 if( opt.emit_debug_info )
                 {
