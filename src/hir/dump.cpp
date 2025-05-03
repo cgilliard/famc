@@ -708,7 +708,7 @@ namespace {
                     else
                     {
                         char buf[3];
-                        sprintf(buf, "%02x", static_cast<uint8_t>(b));
+                        snprintf(buf, 3, "%02x", static_cast<uint8_t>(b));
                         m_os << "\\x" << buf;
                     }
                 }
