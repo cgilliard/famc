@@ -75,7 +75,7 @@ endif
 
 LINKFLAGS += $(LINKFLAGS_EXTRA)
 
-BIN := bin/mrustc$(EXESUF)
+BIN := bin/famc$(EXESUF)
 
 OBJ := main.o version.o
 OBJ += span.o rc_string.o debug.o ident.o
