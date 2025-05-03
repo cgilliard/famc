@@ -1,0 +1,26 @@
+[package]
+name = "languageserver-types"
+version = "0.45.0"
+authors = ["Markus Westerlind <marwes91@gmail.com>", "Bruno Medeiros <bruno.do.medeiros@gmail.com>"]
+
+description = "Types for interaction with a language server, using VSCode's Language Server Protocol"
+
+repository = "https://github.com/gluon-lang/languageserver-types"
+documentation = "https://docs.rs/languageserver-types"
+
+readme = "README.md"
+
+keywords = ["language", "server", "lsp", "vscode"]
+
+license = "MIT"
+
+[dependencies]
+num-derive = "0.2.2"
+num-traits = "0.2"
+bitflags = "1.0.1"
+serde = "1.0.34"
+serde_derive = "1.0.34"
+serde_json = "1.0.0"
+url = "1.1.0"
+url_serde = "0.2.0"
+

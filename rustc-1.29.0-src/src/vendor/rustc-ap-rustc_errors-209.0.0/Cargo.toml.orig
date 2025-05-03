@@ -1,0 +1,25 @@
+[dependencies]
+atty = "0.2"
+termcolor = "0.3"
+unicode-width = "0.1.4"
+
+[dependencies.rustc-ap-rustc_data_structures]
+version = "209.0.0"
+
+[dependencies.rustc-ap-serialize]
+version = "209.0.0"
+
+[dependencies.rustc-ap-syntax_pos]
+version = "209.0.0"
+
+[lib]
+name = "rustc_errors"
+path = "lib.rs"
+
+[package]
+authors = ["The Rust Project Developers"]
+description = "Automatically published version of the package `rustc_errors` in the rust-lang/rust repository from commit 45b48b9b6d70065a16cc119fe934ed342c664c78 The publishing script for this crate lives at: https://github.com/alexcrichton/rustc-auto-publish\n            "
+license = "MIT / Apache-2.0"
+name = "rustc-ap-rustc_errors"
+repository = "https://github.com/rust-lang/rust"
+version = "209.0.0"

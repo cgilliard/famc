@@ -1,0 +1,31 @@
+[dependencies]
+bitflags = "1.0"
+log = "0.4"
+scoped-tls = "0.1"
+
+[dependencies.rustc-ap-rustc_data_structures]
+version = "211.0.0"
+
+[dependencies.rustc-ap-rustc_errors]
+version = "211.0.0"
+
+[dependencies.rustc-ap-rustc_target]
+version = "211.0.0"
+
+[dependencies.rustc-ap-serialize]
+version = "211.0.0"
+
+[dependencies.rustc-ap-syntax_pos]
+version = "211.0.0"
+
+[lib]
+name = "syntax"
+path = "lib.rs"
+
+[package]
+authors = ["The Rust Project Developers"]
+description = "Automatically published version of the package `syntax` in the rust-lang/rust repository from commit 4fbd4a55f739f317fd6b527df49b4c3693aa5d00 The publishing script for this crate lives at: https://github.com/alexcrichton/rustc-auto-publish\n            "
+license = "MIT / Apache-2.0"
+name = "rustc-ap-syntax"
+repository = "https://github.com/rust-lang/rust"
+version = "211.0.0"

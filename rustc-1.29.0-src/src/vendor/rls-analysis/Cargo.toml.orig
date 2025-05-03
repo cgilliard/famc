@@ -1,0 +1,24 @@
+[package]
+name = "rls-analysis"
+version = "0.14.0"
+authors = ["Nick Cameron <ncameron@mozilla.com>"]
+description = "Library for processing rustc's save-analysis data for the RLS"
+license = "Apache-2.0/MIT"
+repository = "https://github.com/nrc/rls-analysis"
+categories = ["development-tools"]
+exclude = [
+    "test_data/*",
+]
+
+[dependencies]
+rustc-serialize = "0.3"
+log = "0.4"
+rls-data = "= 0.16"
+rls-span = "0.4"
+derive-new = "0.5"
+fst = "0.3"
+itertools = "0.7.3"
+
+[dev-dependencies]
+lazy_static = "1"
+env_logger = "0.5"

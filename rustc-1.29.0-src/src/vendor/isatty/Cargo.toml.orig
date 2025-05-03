@@ -1,0 +1,24 @@
+[package]
+name = "isatty"
+version = "0.1.8"
+authors = ["David Tolnay <dtolnay@gmail.com>"]
+license = "MIT/Apache-2.0"
+description = "libc::isatty that also works on Windows"
+repository = "https://github.com/dtolnay/isatty"
+documentation = "https://github.com/dtolnay/isatty"
+keywords = ["tty"]
+categories = ["command-line-interface"]
+readme = "README.md"
+
+[badges]
+travis-ci = { repository = "dtolnay/isatty" }
+appveyor = { repository = "dtolnay/isatty" }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["consoleapi", "fileapi", "minwinbase", "minwindef", "processenv", "winbase", "winnt"] }
+
+[target.'cfg(target_os = "redox")'.dependencies]
+redox_syscall = "0.1"
