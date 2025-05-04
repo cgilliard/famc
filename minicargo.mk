@@ -207,8 +207,6 @@ bin/testrunner$(EXESUF):
 RUSTC_SRC_TARBALL := rustc-$(RUSTC_VERSION)-src.tar.gz
 $(RUSTC_SRC_TARBALL):
 	@echo [CURL] $@
-	@rm -f $@
-	@curl -sS https://static.rust-lang.org/dist/$@ -o $@
 rustc-$(RUSTC_VERSION)-src/extracted: $(RUSTC_SRC_TARBALL)
 	tar -xzf $(RUSTC_SRC_TARBALL)
 	touch $@

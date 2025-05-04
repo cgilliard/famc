@@ -1,0 +1,5 @@
+.obj
+.temp.txt
+bin/
+output/
+rustc-1.29.0-src/
