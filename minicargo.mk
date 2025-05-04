@@ -202,19 +202,23 @@ bin/testrunner$(EXESUF):
 
 
 #
-# rustc (with std/cargo) source download
+# Rust source preparation
 #
-RUSTC_SRC_TARBALL := rustc-$(RUSTC_VERSION)-src.tar.gz
-$(RUSTC_SRC_TARBALL):
-	@echo [CURL] $@
-	@rm -f $@
-	@curl -sS https://static.rust-lang.org/dist/$@ -o $@
-rustc-$(RUSTC_VERSION)-src/extracted: $(RUSTC_SRC_TARBALL)
-	tar -xzf $(RUSTC_SRC_TARBALL)
-	touch $@
-$(RUSTC_SRC_DL): rustc-$(RUSTC_VERSION)-src/extracted rustc-$(RUSTC_VERSION)-src.patch
-	cd $(RUSTCSRC) && patch -p0 < ../rustc-$(RUSTC_VERSION)-src.patch;
-	touch $@
+RUSTCSRC := rustc-$(RUSTC_VERSION)-src/
+RUSTC_SRC_DL := $(RUSTCSRC)/dl-version
+
+# Check for pre-extracted Rust source
+$(RUSTC_SRC_DL):
+	@if [ ! -d "$(RUSTCSRC)" ]; then \
+		echo "Error: Rust source directory $(RUSTCSRC) not found"; \
+		exit 1; \
+	fi
+	@if [ -f "rustc-$(RUSTC_VERSION)-src.patch" ]; then \
+		cd $(RUSTCSRC) && patch -p0 < ../rustc-$(RUSTC_VERSION)-src.patch; \
+		touch $@; \
+	else \
+		touch $@; \
+	fi
 
 # Standard library crates
 # - libstd, libpanic_unwind, libtest and libgetopts
