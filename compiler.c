@@ -225,6 +225,33 @@ struct lexer {
 #define EFBIG 27   /* File too large */
 #define ENOSPC 28  /* No space left on device */
 
+#define IS_ALPHA(ret, ch)                                                 \
+	do {                                                              \
+		ret = 0;                                                  \
+		if (ch == '_' || (ch >= 'a' && ch <= 'z') ||              \
+		    (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) \
+			ret = 1;                                          \
+	} while (0);
+#define NOT_ALPHA(ret, ch)         \
+	do {                       \
+		IS_ALPHA(ret, ch); \
+		ret = !ret;        \
+	} while (0);
+#define READ_IDENT(t, l)                      \
+	do {                                  \
+		t->off = l->off;              \
+		l->off++;                     \
+		while (l->off < l->len) {     \
+			int res__;            \
+			IS_ALPHA(res__, *in); \
+			if (!res__) break;    \
+			in++;                 \
+			l->off++;             \
+		}                             \
+		t->type = token_type_ident;   \
+		t->len = l->off - t->off;     \
+	} while (0);
+
 void *memset(void *dest, int c, unsigned long n);
 void *memcpy(void *dest, const void *src, unsigned long n);
 void *memmove(void *dest, const void *src, unsigned long n);
@@ -545,30 +572,6 @@ static void lexer_skip_whitespace(struct lexer *l) {
 	}
 }
 
-/*
- * enum token_type {
-	token_type_semi,
-	token_type_comma,
-	token_type_asterisk,
-	token_type_left_paren,
-	token_type_right_paren,
-	token_type_left_bracket,
-	token_type_right_bracket,
-	token_type_int,
-	token_type_char,
-	token_type_return,
-	token_type_term
-};
-*/
-
-#define IS_ALPHA(ret, ch)                                                 \
-	do {                                                              \
-		ret = 0;                                                  \
-		if (ch == '_' || (ch >= 'a' && ch <= 'z') ||              \
-		    (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) \
-			ret = 1;                                          \
-	} while (0);
-
 static void lexer_next_token(struct token *t, struct lexer *l) {
 	const char *in;
 	lexer_skip_whitespace(l);
@@ -613,17 +616,13 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 		if (l->off + 5 < l->len) {
 			int cmp = strncmp(in, "eturn", 5);
 			if (!cmp) {
+				int is_match = 0;
 				if (l->off + 6 < l->len) {
-					int res;
-					IS_ALPHA(res, l->in[l->off + 6]);
-					if (!res) {
-						t->off = l->off;
-						t->len = 6;
-						t->type = token_type_return;
-						l->off += 6;
-						return;
-					}
-				} else {
+					NOT_ALPHA(is_match, l->in[l->off + 6]);
+				} else
+					is_match = 1;
+
+				if (is_match) {
 					t->off = l->off;
 					t->len = 6;
 					t->type = token_type_return;
@@ -632,33 +631,19 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 				}
 			}
 		}
-		t->off = l->off;
-		l->off++;
-		while (l->off < l->len) {
-			int res;
-			IS_ALPHA(res, *in);
-			if (!res) break;
-			in++;
-			l->off++;
-		}
-		t->type = token_type_ident;
-		t->len = l->off - t->off;
+		READ_IDENT(t, l);
 	} else if (*in == 'c') {
 		++in;
 		if (l->off + 3 < l->len) {
 			int cmp = strncmp(in, "har", 3);
 			if (!cmp) {
+				int is_match = 0;
 				if (l->off + 4 < l->len) {
-					int res;
-					IS_ALPHA(res, l->in[l->off + 4]);
-					if (!res) {
-						t->off = l->off;
-						t->len = 4;
-						t->type = token_type_char;
-						l->off += 4;
-						return;
-					}
-				} else {
+					NOT_ALPHA(is_match, l->in[l->off + 4]);
+				} else
+					is_match = 1;
+
+				if (is_match) {
 					t->off = l->off;
 					t->len = 4;
 					t->type = token_type_char;
@@ -667,33 +652,19 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 				}
 			}
 		}
-		t->off = l->off;
-		l->off++;
-		while (l->off < l->len) {
-			int res;
-			IS_ALPHA(res, *in);
-			if (!res) break;
-			in++;
-			l->off++;
-		}
-		t->type = token_type_ident;
-		t->len = l->off - t->off;
+		READ_IDENT(t, l);
 	} else if (*in == 'i') {
 		++in;
 		if (l->off + 2 < l->len) {
 			int cmp = strncmp(in, "nt", 2);
 			if (!cmp) {
+				int is_match = 0;
 				if (l->off + 3 < l->len) {
-					int res;
-					IS_ALPHA(res, l->in[l->off + 3]);
-					if (!res) {
-						t->off = l->off;
-						t->len = 3;
-						t->type = token_type_int;
-						l->off += 3;
-						return;
-					}
-				} else {
+					NOT_ALPHA(is_match, l->in[l->off + 3]);
+				} else
+					is_match = 1;
+
+				if (is_match) {
 					t->off = l->off;
 					t->len = 3;
 					t->type = token_type_int;
@@ -702,31 +673,11 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 				}
 			}
 		}
-		t->off = l->off;
-		l->off++;
-		while (l->off < l->len) {
-			int res;
-			IS_ALPHA(res, *in);
-			if (!res) break;
-			in++;
-			l->off++;
-		}
-		t->type = token_type_ident;
-		t->len = l->off - t->off;
+		READ_IDENT(t, l);
 	} else if ((*in >= 'a' && *in <= 'z') || (*in >= 'A' && *in <= 'Z') ||
 		   *in == '_') {
 		in++;
-		t->off = l->off;
-		l->off++;
-		while (l->off < l->len) {
-			int res;
-			IS_ALPHA(res, *in);
-			if (!res) break;
-			in++;
-			l->off++;
-		}
-		t->type = token_type_ident;
-		t->len = l->off - t->off;
+		READ_IDENT(t, l);
 	} else if (*in >= '0' && *in <= '9') {
 		in++;
 		t->off = l->off;
