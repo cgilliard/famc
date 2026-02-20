@@ -1,5 +1,5 @@
-#if !defined(__x86_64__)
-#error "This syscall implementation is x86-64 only"
+#ifndef __x86_64__
+#error "Unsupported platform!"
 #endif
 
 __asm__(
@@ -163,6 +163,39 @@ struct Sync {
 	unsigned *cq_mask;
 };
 
+enum token_type {
+	token_type_error = 0,
+	token_type_semi = 1,
+	token_type_comma = 2,
+	token_type_asterisk = 3,
+	token_type_left_paren = 4,
+	token_type_right_paren = 5,
+	token_type_left_brace = 6,
+	token_type_right_brace = 7,
+	token_type_int = 8,
+	token_type_char = 9,
+	token_type_return = 10,
+	token_type_ident = 11,
+	token_type_num_literal = 12,
+	token_type_term = 13
+};
+
+struct token {
+	enum token_type type;
+	long off;
+	long len;
+	long line_num;
+	long col_num;
+};
+
+struct lexer {
+	char *in;
+	long off;
+	long len;
+	long line_num;
+	long col_start;
+};
+
 #define EPERM 1	   /* Operation not permitted */
 #define ENOENT 2   /* No such file or directory */
 #define ESRCH 3	   /* No such process */
@@ -195,25 +228,9 @@ struct Sync {
 void *memset(void *dest, int c, unsigned long n);
 void *memcpy(void *dest, const void *src, unsigned long n);
 void *memmove(void *dest, const void *src, unsigned long n);
+unsigned long strlen(const char *x);
+int strncmp(const char *x, const char *y, unsigned long n);
 void exit_group(int status);
-
-static void *mmap(void *addr, unsigned long length, int prot, int flags, int fd,
-		  long offset);
-static int munmap(void *addr, unsigned long len);
-static int io_uring_setup(unsigned entries, struct io_uring_params *params);
-static int io_uring_enter2(unsigned fd, unsigned to_submit,
-			   unsigned min_complete, unsigned flags, void *arg,
-			   unsigned long sz);
-static long pwrite(int fd, const void *buf, unsigned len, long offset);
-static int open(const char *pathname, int flags, unsigned mode);
-static int close(int fd);
-static void sync_destroy(struct Sync *sync);
-static int sync_init(struct Sync **s);
-static long sync_execute(struct Sync *s, struct io_uring_sqe sqe);
-static int fallocate(int fd, unsigned long new_size);
-static int unlink(const char *pathname);
-static int fstatx(int fd, struct statx *st);
-static long write_num(int fd, long num);
 
 struct Sync *global_sync = 0;
 
@@ -235,6 +252,18 @@ void *memmove(void *dest, const void *src, unsigned long n) {
 	const unsigned char *s = (const void *)((const unsigned char *)src + n);
 	while (n--) d--, s--, *d = *s;
 	return dest;
+}
+
+unsigned long strlen(const char *x) {
+	const char *y = x;
+	while (*x) x++;
+	return x - y;
+}
+
+int strncmp(const char *x, const char *y, unsigned long n) {
+	while (n > 0 && *x == *y && *x) x++, y++, n--;
+	if (n == 0) return 0;
+	return (char)*x - (char)*y;
 }
 
 void exit_group(int status) { syscall(231, status, 0, 0, 0, 0, 0); }
@@ -404,6 +433,7 @@ static int open(const char *path, int flags, unsigned mode) {
 static int close(int fd) {
 	int res;
 	struct io_uring_sqe sqe = {0};
+
 	sqe.opcode = 19;
 	sqe.fd = fd;
 	sqe.user_data = 1;
@@ -449,6 +479,12 @@ static int unlink(const char *pathname) {
 	return (int)sync_execute(global_sync, sqe);
 }
 
+static void *fmap_ro(int fd, unsigned long size, unsigned long offset) {
+	void *v = mmap(0, size, 1, 1, fd, offset);
+	if (v == (void *)-1) return 0;
+	return v;
+}
+
 static long write_num(int fd, long num) {
 	unsigned char buf[21];
 	unsigned char *p;
@@ -489,20 +525,276 @@ static long write_num(int fd, long num) {
 	return 0;
 }
 
+static int write_str(int fd, char *s) {
+	long written;
+	unsigned long current = 0;
+	unsigned long len = strlen(s);
+	while (current < len) {
+		written = pwrite(fd, s, len - current, 0);
+		if (written < 1) return -1;
+		current += written;
+	}
+	return 0;
+}
+
+static void lexer_skip_whitespace(struct lexer *l) {
+	while (l->off < l->len) {
+		char ch = l->in[l->off];
+		if (ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n') return;
+		l->off++;
+	}
+}
+
+/*
+ * enum token_type {
+	token_type_semi,
+	token_type_comma,
+	token_type_asterisk,
+	token_type_left_paren,
+	token_type_right_paren,
+	token_type_left_bracket,
+	token_type_right_bracket,
+	token_type_int,
+	token_type_char,
+	token_type_return,
+	token_type_term
+};
+*/
+
+#define IS_ALPHA(ret, ch)                                                 \
+	do {                                                              \
+		ret = 0;                                                  \
+		if (ch == '_' || (ch >= 'a' && ch <= 'z') ||              \
+		    (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) \
+			ret = 1;                                          \
+	} while (0);
+
+static void lexer_next_token(struct token *t, struct lexer *l) {
+	const char *in;
+	lexer_skip_whitespace(l);
+	in = l->in + l->off;
+	if (*in == ';') {
+		t->off = l->off;
+		t->len = 1;
+		t->type = token_type_semi;
+		l->off++;
+	} else if (*in == ',') {
+		t->off = l->off;
+		t->len = 1;
+		t->type = token_type_comma;
+		l->off++;
+	} else if (*in == '*') {
+		t->off = l->off;
+		t->len = 1;
+		t->type = token_type_asterisk;
+		l->off++;
+	} else if (*in == '(') {
+		t->off = l->off;
+		t->len = 1;
+		t->type = token_type_left_paren;
+		l->off++;
+	} else if (*in == ')') {
+		t->off = l->off;
+		t->len = 1;
+		t->type = token_type_right_paren;
+		l->off++;
+	} else if (*in == '{') {
+		t->off = l->off;
+		t->len = 1;
+		t->type = token_type_left_brace;
+		l->off++;
+	} else if (*in == '}') {
+		t->off = l->off;
+		t->len = 1;
+		t->type = token_type_right_brace;
+		l->off++;
+	} else if (*in == 'r') {
+		++in;
+		if (l->off + 5 < l->len) {
+			int cmp = strncmp(in, "eturn", 5);
+			if (!cmp) {
+				if (l->off + 6 < l->len) {
+					int res;
+					IS_ALPHA(res, l->in[l->off + 6]);
+					if (!res) {
+						t->off = l->off;
+						t->len = 6;
+						t->type = token_type_return;
+						l->off += 6;
+						return;
+					}
+				} else {
+					t->off = l->off;
+					t->len = 6;
+					t->type = token_type_return;
+					l->off += 6;
+					return;
+				}
+			}
+		}
+		t->off = l->off;
+		l->off++;
+		while (l->off < l->len) {
+			int res;
+			IS_ALPHA(res, *in);
+			if (!res) break;
+			in++;
+			l->off++;
+		}
+		t->type = token_type_ident;
+		t->len = l->off - t->off;
+	} else if (*in == 'c') {
+		++in;
+		if (l->off + 3 < l->len) {
+			int cmp = strncmp(in, "har", 3);
+			if (!cmp) {
+				if (l->off + 4 < l->len) {
+					int res;
+					IS_ALPHA(res, l->in[l->off + 4]);
+					if (!res) {
+						t->off = l->off;
+						t->len = 4;
+						t->type = token_type_char;
+						l->off += 4;
+						return;
+					}
+				} else {
+					t->off = l->off;
+					t->len = 4;
+					t->type = token_type_char;
+					l->off += 4;
+					return;
+				}
+			}
+		}
+		t->off = l->off;
+		l->off++;
+		while (l->off < l->len) {
+			int res;
+			IS_ALPHA(res, *in);
+			if (!res) break;
+			in++;
+			l->off++;
+		}
+		t->type = token_type_ident;
+		t->len = l->off - t->off;
+	} else if (*in == 'i') {
+		++in;
+		if (l->off + 2 < l->len) {
+			int cmp = strncmp(in, "nt", 2);
+			if (!cmp) {
+				if (l->off + 3 < l->len) {
+					int res;
+					IS_ALPHA(res, l->in[l->off + 3]);
+					if (!res) {
+						t->off = l->off;
+						t->len = 3;
+						t->type = token_type_int;
+						l->off += 3;
+						return;
+					}
+				} else {
+					t->off = l->off;
+					t->len = 3;
+					t->type = token_type_int;
+					l->off += 3;
+					return;
+				}
+			}
+		}
+		t->off = l->off;
+		l->off++;
+		while (l->off < l->len) {
+			int res;
+			IS_ALPHA(res, *in);
+			if (!res) break;
+			in++;
+			l->off++;
+		}
+		t->type = token_type_ident;
+		t->len = l->off - t->off;
+	} else if ((*in >= 'a' && *in <= 'z') || (*in >= 'A' && *in <= 'Z') ||
+		   *in == '_') {
+		in++;
+		t->off = l->off;
+		l->off++;
+		while (l->off < l->len) {
+			int res;
+			IS_ALPHA(res, *in);
+			if (!res) break;
+			in++;
+			l->off++;
+		}
+		t->type = token_type_ident;
+		t->len = l->off - t->off;
+	} else if (*in >= '0' && *in <= '9') {
+		in++;
+		t->off = l->off;
+		l->off++;
+		while (l->off < l->len) {
+			if (*in < '0' || *in > '9') break;
+			in++;
+			l->off++;
+		}
+		t->type = token_type_num_literal;
+		t->len = l->off - t->off;
+
+	} else {
+		t->type = token_type_term;
+		t->line_num = l->line_num;
+	}
+}
+
 int main(int argc, char **argv, char **envp) {
+	struct token t = {0};
+	struct lexer l;
 	struct statx st;
 	int fd;
 
-	pwrite(2, "hi\n", 3, 0);
-	fd = open("/tmp/xxz", 02 | 0100, 0600);
-	fallocate(fd, 100);
-	fstatx(fd, &st);
-	write_num(2, st.stx_size);
-	pwrite(2, "\n", 1, 0);
+	if (argc < 2) {
+		write_str(2, "Usage: famc <file>\n");
+		exit_group(-1);
+	}
+
+	fd = open(argv[1], 0, 0);
+
+	if (fd < 0) {
+		write_str(2, "Could not open file.\n");
+		exit_group(-1);
+	}
+
+	if (fstatx(fd, &st) < 0) {
+		write_str(2, "Couldn't obtain size of file.\n");
+		exit_group(-1);
+	}
+
+	l.len = st.stx_size;
+	l.off = l.col_start = l.line_num = 0;
+	l.in = fmap_ro(fd, l.len, 0);
 	close(fd);
-	st.stx_size = 9;
-	unlink("/tmp/xxz");
-	return argc;
-	(void)argv;
+
+	if (!l.in) {
+		write_str(2, "Couldn't mmap file.\n");
+		exit_group(-1);
+	}
+
+	while (1) {
+		lexer_next_token(&t, &l);
+		write_str(2, "token=");
+		write_num(2, t.type);
+		write_str(2, ",offset=");
+		write_num(2, t.off);
+		write_str(2, "\n");
+		if (t.type == token_type_term) break;
+	}
+
+	munmap(l.in, l.len);
+
+	return 0;
+
+	(void)fallocate;
+	(void)unlink;
+	(void)write_num;
 	(void)envp;
+	(void)close;
 }
