@@ -164,21 +164,91 @@ struct Sync {
 };
 
 enum token_type {
-	token_type_error = 0,
-	token_type_semi = 1,
-	token_type_comma = 2,
-	token_type_asterisk = 3,
-	token_type_equal = 4,
-	token_type_left_paren = 5,
-	token_type_right_paren = 6,
-	token_type_left_brace = 7,
-	token_type_right_brace = 8,
-	token_type_int = 9,
-	token_type_char = 10,
-	token_type_return = 11,
-	token_type_ident = 12,
-	token_type_num_literal = 13,
-	token_type_term = 14
+	token_type_error,
+	token_type_semi,
+	token_type_comma,
+	token_type_asterisk,
+	token_type_equal,
+	token_type_left_paren,
+	token_type_right_paren,
+	token_type_left_brace,
+	token_type_right_brace,
+	token_type_left_bracket,
+	token_type_right_bracket,
+	token_type_minus,
+	token_type_bang,
+	token_type_percent,
+	token_type_ampersand,
+	token_type_plus,
+	token_type_dot,
+	token_type_div,
+	token_type_colon,
+	token_type_less_than,
+	token_type_greater_than,
+	token_type_question_mark,
+	token_type_caret,
+	token_type_pipe,
+	token_type_tilde,
+	token_type_pound,
+	token_type_arrow,
+	token_type_plus_plus,
+	token_type_minus_minus,
+	token_type_shift_left,
+	token_type_shift_right,
+	token_type_less_than_equal,
+	token_type_greater_than_equal,
+	token_type_double_equal,
+	token_type_not_equal,
+	token_type_double_ampersand,
+	token_type_double_pipe,
+	token_type_plus_equal,
+	token_type_minus_equal,
+	token_type_mul_equal,
+	token_type_div_equal,
+	token_type_percent_equal,
+	token_type_shift_left_assign,
+	token_type_shift_right_assign,
+	token_type_ampersand_equal,
+	token_type_caret_equal,
+	token_type_pipe_equal,
+	token_type_ellipsis,
+	token_type_double_pound,
+	token_type_auto,
+	token_type_break,
+	token_type_case,
+	token_type_char,
+	token_type_const,
+	token_type_continue,
+	token_type_default,
+	token_type_do,
+	token_type_double,
+	token_type_else,
+	token_type_enum,
+	token_type_extern,
+	token_type_float,
+	token_type_for,
+	token_type_goto,
+	token_type_if,
+	token_type_int,
+	token_type_long,
+	token_type_return,
+	token_type_short,
+	token_type_signed,
+	token_type_sizeof,
+	token_type_static,
+	token_type_struct,
+	token_type_switch,
+	token_type_typedef,
+	token_type_union,
+	token_type_unsigned,
+	token_type_void,
+	token_type_volatile,
+	token_type_while,
+	token_type_ident,
+	token_type_num_literal,
+	token_type_char_literal,
+	token_type_string_literal,
+	token_type_term
 };
 
 struct token {
@@ -239,18 +309,18 @@ struct lexer {
 		IS_ALPHA(ret, ch); \
 		ret = !ret;        \
 	} while (0);
-#define READ_IDENT(t, l)                                \
-	do {                                            \
-		t->off = l->off;                        \
-		l->off++;                               \
-		while (l->off < l->len) {               \
-			int res__;                      \
-			IS_ALPHA(res__, l->in[l->off]); \
-			if (!res__) break;              \
-			l->off++;                       \
-		}                                       \
-		t->type = token_type_ident;             \
-		t->len = l->off - t->off;               \
+#define READ_IDENT(t, l)                           \
+	do {                                       \
+		const char *in__ = l->in + l->off; \
+		while (++in__ != l->end) {         \
+			int res__;                 \
+			IS_ALPHA(res__, *in__);    \
+			if (!res__) break;         \
+		}                                  \
+		t->type = token_type_ident;        \
+		t->len = in__ - (l->in + l->off);  \
+		t->off = l->off;                   \
+		l->off += t->len;                  \
 	} while (0);
 #define SET_MATCH(t, l, mlen, mtype) \
 	do {                         \
@@ -574,59 +644,337 @@ static int write_str(int fd, char *s) {
 }
 
 static void lexer_skip_whitespace(struct lexer *l) {
-	while (l->off < l->len) {
-		char ch = l->in[l->off];
-		if (ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n') return;
-		l->off++;
+	const char *in = l->in + l->off;
+	while (in != l->end) {
+		if (*in != ' ' && *in != '\t' && *in != '\r' && *in != '\n')
+			break;
+		in++;
 	}
+	l->off += in - (l->in + l->off);
 }
 
 static void lexer_next_token(struct token *t, struct lexer *l) {
+	int is_alpha;
 	const char *in;
 	lexer_skip_whitespace(l);
 	in = l->in + l->off;
+
 	if (*in == ';') {
-		t->off = l->off;
-		t->len = 1;
-		t->type = token_type_semi;
-		l->off++;
+		SET_MATCH(t, l, 1, token_type_semi);
+	} else if (*in == '!') {
+		if (in + 1 != l->end) {
+			if (*(in + 1) == '=') {
+				SET_MATCH(t, l, 2, token_type_not_equal);
+			}
+		}
+		SET_MATCH(t, l, 1, token_type_bang);
+	} else if (*in == '%') {
+		if (in + 1 != l->end) {
+			if (*(in + 1) == '=') {
+				SET_MATCH(t, l, 2, token_type_percent_equal);
+			}
+		}
+		SET_MATCH(t, l, 1, token_type_percent);
+	} else if (*in == '&') {
+		if (in + 1 != l->end) {
+			if (*(in + 1) == '&') {
+				SET_MATCH(t, l, 2, token_type_double_ampersand);
+			} else if (*(in + 1) == '=') {
+				SET_MATCH(t, l, 2, token_type_ampersand_equal);
+			}
+		}
+		SET_MATCH(t, l, 1, token_type_ampersand);
+	} else if (*in == '.') {
+		if (l->end - in >= 2) {
+			if (*(in + 1) == '.' && *(in + 2) == '.') {
+				SET_MATCH(t, l, 3, token_type_ellipsis);
+			}
+		}
+		SET_MATCH(t, l, 1, token_type_dot);
+	} else if (*in == '/') {
+		if (in + 1 != l->end) {
+			if (*(in + 1) == '=') {
+				SET_MATCH(t, l, 2, token_type_div_equal);
+			}
+		}
+		SET_MATCH(t, l, 1, token_type_div);
+	} else if (*in == ':') {
+		SET_MATCH(t, l, 1, token_type_colon);
+	} else if (*in == '<') {
+		if (in + 1 != l->end) {
+			if (*(in + 1) == '<') {
+				if (in + 2 != l->end && *(in + 2) == '=') {
+					SET_MATCH(
+					    t, l, 3,
+					    token_type_shift_right_assign);
+				}
+				SET_MATCH(t, l, 2, token_type_shift_right);
+			} else if (*(in + 1) == '=') {
+				SET_MATCH(t, l, 2, token_type_less_than_equal);
+			}
+		}
+		SET_MATCH(t, l, 1, token_type_less_than);
+	} else if (*in == '>') {
+		if (in + 1 != l->end) {
+			if (*(in + 1) == '>') {
+				if (in + 2 != l->end && *(in + 2) == '=') {
+					SET_MATCH(t, l, 3,
+						  token_type_shift_left_assign);
+				}
+				SET_MATCH(t, l, 2, token_type_shift_left);
+			} else if (*(in + 1) == '=') {
+				SET_MATCH(t, l, 2,
+					  token_type_greater_than_equal);
+			}
+		}
+		SET_MATCH(t, l, 1, token_type_greater_than);
+	} else if (*in == '^') {
+		if (in + 1 != l->end) {
+			if (*(in + 1) == '=') {
+				SET_MATCH(t, l, 2, token_type_caret_equal);
+			}
+		}
+		SET_MATCH(t, l, 1, token_type_caret);
+	} else if (*in == '|') {
+		if (in + 1 != l->end) {
+			if (*(in + 1) == '|') {
+				SET_MATCH(t, l, 2, token_type_double_pipe);
+			} else if (*(in + 1) == '=') {
+				SET_MATCH(t, l, 2, token_type_pipe_equal);
+			}
+		}
+		SET_MATCH(t, l, 1, token_type_pipe);
+	} else if (*in == '~') {
+		SET_MATCH(t, l, 1, token_type_tilde);
+	} else if (*in == '#') {
+		if (in + 1 != l->end) {
+			if (*(in + 1) == '#') {
+				SET_MATCH(t, l, 2, token_type_double_pound);
+			}
+		}
+		SET_MATCH(t, l, 1, token_type_pound);
 	} else if (*in == ',') {
-		t->off = l->off;
-		t->len = 1;
-		t->type = token_type_comma;
-		l->off++;
+		SET_MATCH(t, l, 1, token_type_comma);
 	} else if (*in == '*') {
-		t->off = l->off;
-		t->len = 1;
-		t->type = token_type_asterisk;
-		l->off++;
+		if (in + 1 != l->end) {
+			if (*(in + 1) == '=') {
+				SET_MATCH(t, l, 2, token_type_mul_equal);
+			}
+		}
+		SET_MATCH(t, l, 1, token_type_asterisk);
 	} else if (*in == '=') {
-		t->off = l->off;
-		t->len = 1;
-		t->type = token_type_equal;
-		l->off++;
+		if (in + 1 != l->end) {
+			if (*(in + 1) == '=') {
+				SET_MATCH(t, l, 2, token_type_double_equal);
+			}
+		}
+		SET_MATCH(t, l, 1, token_type_equal);
 	} else if (*in == '(') {
-		t->off = l->off;
-		t->len = 1;
-		t->type = token_type_left_paren;
-		l->off++;
+		SET_MATCH(t, l, 1, token_type_left_paren);
 	} else if (*in == ')') {
-		t->off = l->off;
-		t->len = 1;
-		t->type = token_type_right_paren;
-		l->off++;
+		SET_MATCH(t, l, 1, token_type_right_paren);
 	} else if (*in == '{') {
-		t->off = l->off;
-		t->len = 1;
-		t->type = token_type_left_brace;
-		l->off++;
+		SET_MATCH(t, l, 1, token_type_left_brace);
 	} else if (*in == '}') {
-		t->off = l->off;
-		t->len = 1;
-		t->type = token_type_right_brace;
-		l->off++;
+		SET_MATCH(t, l, 1, token_type_right_brace);
+	} else if (*in == '+') {
+		if (in + 1 != l->end) {
+			if (*(in + 1) == '+') {
+				SET_MATCH(t, l, 2, token_type_plus_plus);
+			} else if (*(in + 1) == '=') {
+				SET_MATCH(t, l, 2, token_type_plus_equal);
+			}
+		}
+		SET_MATCH(t, l, 1, token_type_plus);
+	} else if (*in == '-') {
+		if (in + 1 != l->end) {
+			if (*(in + 1) == '-') {
+				SET_MATCH(t, l, 2, token_type_minus_minus);
+			} else if (*(in + 1) == '=') {
+				SET_MATCH(t, l, 2, token_type_minus_equal);
+			} else if (*(in + 1) == '>') {
+				SET_MATCH(t, l, 2, token_type_arrow);
+			}
+		}
+		SET_MATCH(t, l, 1, token_type_minus);
+	} else if (*in == 'a') {
+		if (++in == l->end || *in != 'u') goto ident;
+		if (++in == l->end || *in != 't') goto ident;
+		if (++in == l->end || *in != 'o') goto ident;
+		if (++in != l->end) {
+			IS_ALPHA(is_alpha, *in);
+			if (is_alpha) goto ident;
+		}
+		SET_MATCH(t, l, 4, token_type_auto);
+	} else if (*in == 'b') {
+		if (++in == l->end || *in != 'r') goto ident;
+		if (++in == l->end || *in != 'e') goto ident;
+		if (++in == l->end || *in != 'a') goto ident;
+		if (++in == l->end || *in != 'k') goto ident;
+		if (++in != l->end) {
+			IS_ALPHA(is_alpha, *in);
+			if (is_alpha) goto ident;
+		}
+		SET_MATCH(t, l, 5, token_type_break);
+	} else if (*in == 'c') {
+		if (++in == l->end || *in != 'h') {
+			if (in != l->end && *in == 'a') {
+				if (++in == l->end || *in != 's') goto ident;
+				if (++in == l->end || *in != 'e') goto ident;
+				if (++in != l->end) {
+					IS_ALPHA(is_alpha, *in);
+					if (is_alpha) goto ident;
+				}
+				SET_MATCH(t, l, 4, token_type_case);
+			} else if (in != l->end && *in == 'o') {
+				if (++in == l->end || *in != 'n') goto ident;
+				if (++in == l->end || *in != 's') {
+					if (*in != 't') goto ident;
+					if (++in == l->end || *in != 'i')
+						goto ident;
+					if (++in == l->end || *in != 'n')
+						goto ident;
+					if (++in == l->end || *in != 'u')
+						goto ident;
+					if (++in == l->end || *in != 'e')
+						goto ident;
+					if (++in != l->end) {
+						IS_ALPHA(is_alpha, *in);
+						if (is_alpha) goto ident;
+					}
+					SET_MATCH(t, l, 8, token_type_continue);
+				}
+				if (++in == l->end || *in != 't') goto ident;
+				if (++in != l->end) {
+					IS_ALPHA(is_alpha, *in);
+					if (is_alpha) goto ident;
+				}
+				SET_MATCH(t, l, 5, token_type_const);
+			}
+			goto ident;
+		}
+		if (++in == l->end || *in != 'a') goto ident;
+		if (++in == l->end || *in != 'r') goto ident;
+		if (++in != l->end) {
+			IS_ALPHA(is_alpha, *in);
+			if (is_alpha) goto ident;
+		}
+		SET_MATCH(t, l, 4, token_type_char);
+	} else if (*in == 'd') {
+		if (++in == l->end) goto ident;
+		if (*in != 'e') {
+			if (*in != 'o') goto ident;
+			if (++in == l->end) {
+				SET_MATCH(t, l, 2, token_type_do);
+			}
+			IS_ALPHA(is_alpha, *in);
+			if (!is_alpha) {
+				SET_MATCH(t, l, 2, token_type_do);
+			}
+			if (*in != 'u') goto ident;
+			if (++in == l->end || *in != 'b') goto ident;
+			if (++in == l->end || *in != 'l') goto ident;
+			if (++in == l->end || *in != 'e') goto ident;
+			if (++in != l->end) {
+				IS_ALPHA(is_alpha, *in);
+				if (is_alpha) goto ident;
+			}
+			SET_MATCH(t, l, 6, token_type_double);
+		}
+		if (++in == l->end || *in != 'f') goto ident;
+		if (++in == l->end || *in != 'a') goto ident;
+		if (++in == l->end || *in != 'u') goto ident;
+		if (++in == l->end || *in != 'l') goto ident;
+		if (++in == l->end || *in != 't') goto ident;
+		if (++in != l->end) {
+			IS_ALPHA(is_alpha, *in);
+			if (is_alpha) goto ident;
+		}
+		SET_MATCH(t, l, 7, token_type_default);
+	} else if (*in == 'e') {
+		if (++in == l->end || *in != 'l') {
+			if (in == l->end)
+				goto ident;
+			else if (*in == 'n') {
+				if (++in == l->end || *in != 'u') goto ident;
+				if (++in == l->end || *in != 'm') goto ident;
+				if (++in != l->end) {
+					IS_ALPHA(is_alpha, *in);
+					if (is_alpha) goto ident;
+				}
+				SET_MATCH(t, l, 4, token_type_enum);
+			} else if (*in == 'x') {
+				if (++in == l->end || *in != 't') goto ident;
+				if (++in == l->end || *in != 'e') goto ident;
+				if (++in == l->end || *in != 'r') goto ident;
+				if (++in == l->end || *in != 'n') goto ident;
+				if (++in != l->end) {
+					IS_ALPHA(is_alpha, *in);
+					if (is_alpha) goto ident;
+				}
+				SET_MATCH(t, l, 6, token_type_extern);
+			} else
+				goto ident;
+		}
+		if (++in == l->end || *in != 's') goto ident;
+		if (++in == l->end || *in != 'e') goto ident;
+		if (++in != l->end) {
+			IS_ALPHA(is_alpha, *in);
+			if (is_alpha) goto ident;
+		}
+		SET_MATCH(t, l, 4, token_type_else);
+	} else if (*in == 'f') {
+		if (++in == l->end || *in != 'l') {
+			if (in == l->end || *in != 'o') goto ident;
+			if (++in == l->end || *in != 'r') goto ident;
+			if (++in != l->end) {
+				IS_ALPHA(is_alpha, *in);
+				if (is_alpha) goto ident;
+			}
+			SET_MATCH(t, l, 3, token_type_for);
+		}
+		if (++in == l->end || *in != 'o') goto ident;
+		if (++in == l->end || *in != 'a') goto ident;
+		if (++in == l->end || *in != 't') goto ident;
+		if (++in != l->end) {
+			IS_ALPHA(is_alpha, *in);
+			if (is_alpha) goto ident;
+		}
+		SET_MATCH(t, l, 5, token_type_float);
+	} else if (*in == 'g') {
+		if (++in == l->end || *in != 'o') goto ident;
+		if (++in == l->end || *in != 't') goto ident;
+		if (++in == l->end || *in != 'o') goto ident;
+		if (++in != l->end) {
+			IS_ALPHA(is_alpha, *in);
+			if (is_alpha) goto ident;
+		}
+		SET_MATCH(t, l, 4, token_type_goto);
+	} else if (*in == 'i') {
+		if (++in == l->end || *in != 'n') {
+			if (in == l->end || *in != 'f') goto ident;
+			if (++in != l->end) {
+				IS_ALPHA(is_alpha, *in);
+				if (is_alpha) goto ident;
+			}
+			SET_MATCH(t, l, 2, token_type_if);
+		}
+		if (++in == l->end || *in != 't') goto ident;
+		if (++in != l->end) {
+			IS_ALPHA(is_alpha, *in);
+			if (is_alpha) goto ident;
+		}
+		SET_MATCH(t, l, 3, token_type_int);
+	} else if (*in == 'l') {
+		if (++in == l->end || *in != 'o') goto ident;
+		if (++in == l->end || *in != 'n') goto ident;
+		if (++in == l->end || *in != 'g') goto ident;
+		if (++in != l->end) {
+			IS_ALPHA(is_alpha, *in);
+			if (is_alpha) goto ident;
+		}
+		SET_MATCH(t, l, 4, token_type_long);
 	} else if (*in == 'r') {
-		int is_alpha;
 		if (++in == l->end || *in != 'e') goto ident;
 		if (++in == l->end || *in != 't') goto ident;
 		if (++in == l->end || *in != 'u') goto ident;
@@ -637,46 +985,161 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 			if (is_alpha) goto ident;
 		}
 		SET_MATCH(t, l, 6, token_type_return);
-	} else if (*in == 'c') {
-		int is_alpha;
-		if (++in == l->end || *in != 'h') goto ident;
-		if (++in == l->end || *in != 'a') goto ident;
-		if (++in == l->end || *in != 'r') goto ident;
-		if (++in != l->end) {
-			IS_ALPHA(is_alpha, *in);
-			if (is_alpha) goto ident;
+	} else if (*in == 's') {
+		if (++in == l->end || *in != 'w') {
+			if (in == l->end) goto ident;
+			if (*in == 'i') {
+				if (++in == l->end || *in != 'g') {
+					if (in == l->end) goto ident;
+					if (*in != 'z') goto ident;
+					if (++in == l->end || *in != 'e')
+						goto ident;
+					if (++in == l->end || *in != 'o')
+						goto ident;
+					if (++in == l->end || *in != 'f')
+						goto ident;
+					if (++in != l->end) {
+						IS_ALPHA(is_alpha, *in);
+						if (is_alpha) goto ident;
+					}
+					SET_MATCH(t, l, 6, token_type_sizeof);
+				}
+				if (++in == l->end || *in != 'n') goto ident;
+				if (++in == l->end || *in != 'e') goto ident;
+				if (++in == l->end || *in != 'd') goto ident;
+				if (++in != l->end) {
+					IS_ALPHA(is_alpha, *in);
+					if (is_alpha) goto ident;
+				}
+				SET_MATCH(t, l, 6, token_type_signed);
+			} else if (*in == 't') {
+				if (++in == l->end || *in != 'r') {
+					if (in == l->end) goto ident;
+					if (*in != 'a') goto ident;
+					if (++in == l->end || *in != 't')
+						goto ident;
+					if (++in == l->end || *in != 'i')
+						goto ident;
+					if (++in == l->end || *in != 'c')
+						goto ident;
+					if (++in != l->end) {
+						IS_ALPHA(is_alpha, *in);
+						if (is_alpha) goto ident;
+					}
+					SET_MATCH(t, l, 6, token_type_static);
+				}
+				if (++in == l->end || *in != 'u') goto ident;
+				if (++in == l->end || *in != 'c') goto ident;
+				if (++in == l->end || *in != 't') goto ident;
+				if (++in != l->end) {
+					IS_ALPHA(is_alpha, *in);
+					if (is_alpha) goto ident;
+				}
+				SET_MATCH(t, l, 6, token_type_struct);
+			}
+			if (*in != 'h') goto ident;
+			if (++in == l->end || *in != 'o') goto ident;
+			if (++in == l->end || *in != 'r') goto ident;
+			if (++in == l->end || *in != 't') goto ident;
+			if (++in != l->end) {
+				IS_ALPHA(is_alpha, *in);
+				if (is_alpha) goto ident;
+			}
+			SET_MATCH(t, l, 5, token_type_short);
 		}
-		SET_MATCH(t, l, 4, token_type_char);
-	} else if (*in == 'i') {
-		int is_alpha;
-		if (++in == l->end || *in != 'n') goto ident;
+		if (++in == l->end || *in != 'i') goto ident;
 		if (++in == l->end || *in != 't') goto ident;
+		if (++in == l->end || *in != 'c') goto ident;
+		if (++in == l->end || *in != 'h') goto ident;
 		if (++in != l->end) {
 			IS_ALPHA(is_alpha, *in);
 			if (is_alpha) goto ident;
 		}
-		SET_MATCH(t, l, 3, token_type_int);
+		SET_MATCH(t, l, 6, token_type_switch);
+	} else if (*in == 't') {
+		if (++in == l->end || *in != 'y') goto ident;
+		if (++in == l->end || *in != 'p') goto ident;
+		if (++in == l->end || *in != 'e') goto ident;
+		if (++in == l->end || *in != 'd') goto ident;
+		if (++in == l->end || *in != 'e') goto ident;
+		if (++in == l->end || *in != 'f') goto ident;
+		if (++in != l->end) {
+			IS_ALPHA(is_alpha, *in);
+			if (is_alpha) goto ident;
+		}
+		SET_MATCH(t, l, 7, token_type_typedef);
+	} else if (*in == 'u') {
+		if (++in == l->end || *in != 'n') goto ident;
+		if (++in == l->end || *in != 's') {
+			if (in == l->end || *in != 'i') goto ident;
+			if (++in == l->end || *in != 'o') goto ident;
+			if (++in == l->end || *in != 'n') goto ident;
+			if (++in != l->end) {
+				IS_ALPHA(is_alpha, *in);
+				if (is_alpha) goto ident;
+			}
+			SET_MATCH(t, l, 5, token_type_union);
+		}
+		if (++in == l->end || *in != 'i') goto ident;
+		if (++in == l->end || *in != 'g') goto ident;
+		if (++in == l->end || *in != 'n') goto ident;
+		if (++in == l->end || *in != 'e') goto ident;
+		if (++in == l->end || *in != 'd') goto ident;
+		if (++in != l->end) {
+			IS_ALPHA(is_alpha, *in);
+			if (is_alpha) goto ident;
+		}
+		SET_MATCH(t, l, 8, token_type_unsigned);
+	} else if (*in == 'v') {
+		if (++in == l->end || *in != 'o') goto ident;
+		if (++in == l->end || *in != 'l') {
+			if (in == l->end || *in != 'i') goto ident;
+			if (++in == l->end || *in != 'd') goto ident;
+			if (++in != l->end) {
+				IS_ALPHA(is_alpha, *in);
+				if (is_alpha) goto ident;
+			}
+			SET_MATCH(t, l, 4, token_type_void);
+		}
+		if (++in == l->end || *in != 'a') goto ident;
+		if (++in == l->end || *in != 't') goto ident;
+		if (++in == l->end || *in != 'i') goto ident;
+		if (++in == l->end || *in != 'l') goto ident;
+		if (++in == l->end || *in != 'e') goto ident;
+		if (++in != l->end) {
+			IS_ALPHA(is_alpha, *in);
+			if (is_alpha) goto ident;
+		}
+		SET_MATCH(t, l, 8, token_type_volatile);
+	} else if (*in == 'w') {
+		if (++in == l->end || *in != 'h') goto ident;
+		if (++in == l->end || *in != 'i') goto ident;
+		if (++in == l->end || *in != 'l') goto ident;
+		if (++in == l->end || *in != 'e') goto ident;
+		if (++in != l->end) {
+			IS_ALPHA(is_alpha, *in);
+			if (is_alpha) goto ident;
+		}
+		SET_MATCH(t, l, 5, token_type_while);
 	} else if ((*in >= 'a' && *in <= 'z') || (*in >= 'A' && *in <= 'Z') ||
 		   *in == '_') {
 	ident:
 		READ_IDENT(t, l);
 	} else if (*in >= '0' && *in <= '9') {
-		in++;
 		t->off = l->off;
-		l->off++;
-		while (l->off < l->len) {
-			if (*in < '0' || *in > '9') break;
-			in++;
-			l->off++;
-		}
+		while (++in != l->end && (*in >= '0' && *in <= '9'));
+		l->off = in - l->in;
 		t->type = token_type_num_literal;
 		t->len = l->off - t->off;
-
-	} else if (l->off >= l->len) {
+	} else if (in >= l->end) {
 		t->type = token_type_term;
-		t->line_num = l->line_num;
+		t->len = 0;
+		t->off = l->end - l->in;
 	} else {
 		t->type = token_type_error;
+		t->len = 0;
+		t->off = l->off;
+		l->off++;
 	}
 }
 
@@ -716,6 +1179,7 @@ int main(int argc, char **argv, char **envp) {
 
 	while (1) {
 		lexer_next_token(&t, &l);
+		/*
 		write_str(2, "token=");
 		write_num(2, t.type);
 		write_str(2, ",offset=");
@@ -723,6 +1187,7 @@ int main(int argc, char **argv, char **envp) {
 		write_str(2, ",value='");
 		pwrite(2, l.in + t.off, t.len, 0);
 		write_str(2, "'\n");
+		*/
 		if (t.type == token_type_term) break;
 	}
 

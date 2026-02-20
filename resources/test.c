@@ -1,4 +1,5 @@
 int main(int argc, char **argv) {
-	int ixv23 = 5;
+	signed int ixv23 = 534;
+	x->ok = 2 - 1;
 	return ixv23;
 }
