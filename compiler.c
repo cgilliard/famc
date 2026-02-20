@@ -190,6 +190,7 @@ enum token_type {
 	token_type_pipe,
 	token_type_tilde,
 	token_type_pound,
+	token_type_backslash,
 	token_type_arrow,
 	token_type_plus_plus,
 	token_type_minus_minus,
@@ -248,6 +249,7 @@ enum token_type {
 	token_type_num_literal,
 	token_type_char_literal,
 	token_type_string_literal,
+	token_type_comment,
 	token_type_term
 };
 
@@ -322,13 +324,14 @@ struct lexer {
 		t->off = l->off;                   \
 		l->off += t->len;                  \
 	} while (0);
-#define SET_MATCH(t, l, mlen, mtype) \
-	do {                         \
-		t->off = l->off;     \
-		t->len = mlen;       \
-		t->type = mtype;     \
-		l->off += mlen;      \
-		return;              \
+#define SET_MATCH(t, l, mlen, mtype)       \
+	do {                               \
+		t->off = l->off;           \
+		t->len = mlen;             \
+		t->type = mtype;           \
+		t->line_num = l->line_num; \
+		l->off += mlen;            \
+		return;                    \
 	} while (0);
 
 void *memset(void *dest, int c, unsigned long n);
@@ -556,7 +559,8 @@ static int fallocate(int fd, unsigned long new_size) {
 	sqe.fd = fd;
 	sqe.addr = new_size;
 	sqe.user_data = 1;
-	if ((res = sync_init(&global_sync)) < 0) return res;
+	if (!global_sync)
+		if ((res = sync_init(&global_sync)) < 0) return res;
 	return (int)sync_execute(global_sync, sqe);
 }
 
@@ -570,7 +574,8 @@ static int fstatx(int fd, struct statx *st) {
 	sqe.off = (unsigned long)st;
 	sqe.rw_flags = 0x1000;
 	sqe.user_data = 1;
-	if ((res = sync_init(&global_sync)) < 0) return 0;
+	if (!global_sync)
+		if ((res = sync_init(&global_sync)) < 0) return 0;
 	return (int)sync_execute(global_sync, sqe);
 }
 
@@ -581,7 +586,8 @@ static int unlink(const char *pathname) {
 	sqe.fd = -100;
 	sqe.addr = (unsigned long)pathname;
 	sqe.user_data = 1;
-	if ((res = sync_init(&global_sync)) < 0) return res;
+	if (!global_sync)
+		if ((res = sync_init(&global_sync)) < 0) return res;
 	return (int)sync_execute(global_sync, sqe);
 }
 
@@ -646,8 +652,10 @@ static int write_str(int fd, char *s) {
 static void lexer_skip_whitespace(struct lexer *l) {
 	const char *in = l->in + l->off;
 	while (in != l->end) {
-		if (*in != ' ' && *in != '\t' && *in != '\r' && *in != '\n')
+		if (*in != ' ' && *in != '\t' && *in != '\r' && *in != '\n' &&
+		    *in != '\v' && *in != '\f')
 			break;
+		if (*in == '\n') l->line_num++;
 		in++;
 	}
 	l->off += in - (l->in + l->off);
@@ -693,6 +701,18 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 		SET_MATCH(t, l, 1, token_type_dot);
 	} else if (*in == '/') {
 		if (in + 1 != l->end) {
+			if (*(in + 1) == '*') {
+				while (++in != l->end)
+					if (*in == '/' && *(in - 1) == '*')
+						break;
+				if (in == l->end) {
+					SET_MATCH(t, l, in - (l->in + l->off),
+						  token_type_error);
+				}
+				++in;
+				SET_MATCH(t, l, in - (l->in + l->off),
+					  token_type_comment);
+			}
 			if (*(in + 1) == '=') {
 				SET_MATCH(t, l, 2, token_type_div_equal);
 			}
@@ -769,6 +789,12 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 			}
 		}
 		SET_MATCH(t, l, 1, token_type_equal);
+	} else if (*in == '\\') {
+		SET_MATCH(t, l, 1, token_type_backslash);
+	} else if (*in == '[') {
+		SET_MATCH(t, l, 1, token_type_left_bracket);
+	} else if (*in == ']') {
+		SET_MATCH(t, l, 1, token_type_right_bracket);
 	} else if (*in == '(') {
 		SET_MATCH(t, l, 1, token_type_left_paren);
 	} else if (*in == ')') {
@@ -1121,6 +1147,53 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 			if (is_alpha) goto ident;
 		}
 		SET_MATCH(t, l, 5, token_type_while);
+	} else if (*in == '\"') {
+		while (++in != l->end)
+			if (*in == '\"' && *(in - 1) != '\\') break;
+		if (in != l->end) {
+			in++;
+			SET_MATCH(t, l, in - (l->in + l->off),
+				  token_type_string_literal);
+		} else {
+			SET_MATCH(t, l, in - (l->in + l->off),
+				  token_type_error);
+		}
+	} else if (*in == '\'') {
+		int match_len = 3;
+		if (++in == l->end) {
+			SET_MATCH(t, l, 1, token_type_error);
+		}
+		if (*in == '\'') {
+			SET_MATCH(t, l, 2, token_type_error);
+		}
+		if (*in == '\\') {
+			if (++in == l->end) {
+				SET_MATCH(t, l, 2, token_type_error);
+			}
+			if (*in != '\'' && *in != '\"' && *in != '?' &&
+			    *in != '\\' && *in != 'a' && *in != 'b' &&
+			    *in != 'f' && *in != 'n' && *in != 'r' &&
+			    *in != 't' && *in != 'v' && *in != '0') {
+				while (in != l->end) {
+					if (*in == '\'') break;
+					++in;
+				}
+				++in;
+				SET_MATCH(t, l, in - (l->in + l->off),
+					  token_type_error);
+			}
+			match_len = 4;
+		}
+		if (++in == l->end || *in != '\'') {
+			while (in != l->end) {
+				if (*in == '\'') break;
+				++in;
+			}
+			++in;
+			SET_MATCH(t, l, in - (l->in + l->off),
+				  token_type_error);
+		}
+		SET_MATCH(t, l, match_len, token_type_char_literal);
 	} else if ((*in >= 'a' && *in <= 'z') || (*in >= 'A' && *in <= 'Z') ||
 		   *in == '_') {
 	ident:
@@ -1135,11 +1208,9 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 		t->type = token_type_term;
 		t->len = 0;
 		t->off = l->end - l->in;
+		t->line_num = l->line_num;
 	} else {
-		t->type = token_type_error;
-		t->len = 0;
-		t->off = l->off;
-		l->off++;
+		SET_MATCH(t, l, 1, token_type_error);
 	}
 }
 
@@ -1179,19 +1250,17 @@ int main(int argc, char **argv, char **envp) {
 
 	while (1) {
 		lexer_next_token(&t, &l);
-		/*
-		write_str(2, "token=");
-		write_num(2, t.type);
-		write_str(2, ",offset=");
-		write_num(2, t.off);
-		write_str(2, ",value='");
-		pwrite(2, l.in + t.off, t.len, 0);
-		write_str(2, "'\n");
-		*/
+		write_str(1, "token=");
+		write_num(1, t.type);
+		write_str(1, ",offset=");
+		write_num(1, t.off);
+		write_str(1, ",value='");
+		pwrite(1, l.in + t.off, t.len, 0);
+		write_str(1, "',line=");
+		write_num(1, t.line_num + 1);
+		write_str(1, "\n");
 		if (t.type == token_type_term) break;
 	}
-
-	munmap(l.in, l.len);
 
 	return 0;
 
