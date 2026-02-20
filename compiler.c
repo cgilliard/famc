@@ -1,3 +1,7 @@
+#if !defined(__x86_64__)
+#error "This syscall implementation is x86-64 only"
+#endif
+
 __asm__(
     ".section .text\n"
     ".global _start\n"
@@ -38,6 +42,10 @@ __asm(
     "atomic_sub_unsigned :\n"
     "lock sub %esi,(%rdi)\n"
     "ret\n");
+
+void atomic_add_unsigned(unsigned *ptr, unsigned value);
+void atomic_sub_unsigned(unsigned *ptr, unsigned value);
+long syscall(long sysno, long a0, long a1, long a2, long a3, long a4, long a5);
 
 struct statx_timestamp {
 	long tv_sec;
@@ -187,27 +195,25 @@ struct Sync {
 void *memset(void *dest, int c, unsigned long n);
 void *memcpy(void *dest, const void *src, unsigned long n);
 void *memmove(void *dest, const void *src, unsigned long n);
-long syscall(long sysno, long a0, long a1, long a2, long a3, long a4, long a5);
 void exit_group(int status);
-void *mmap(void *addr, unsigned long length, int prot, int flags, int fd,
-	   long offset);
-int munmap(void *addr, unsigned long len);
-int io_uring_setup(unsigned entries, struct io_uring_params *params);
-int io_uring_enter2(unsigned fd, unsigned to_submit, unsigned min_complete,
-		    unsigned flags, void *arg, unsigned long sz);
-long pwrite(int fd, const void *buf, unsigned len, long offset);
-int open(const char *pathname, int flags, unsigned mode);
-int close(int fd);
-long lseek(int fd, long offset, int whence);
-void sync_destroy(struct Sync *sync);
-int sync_init(struct Sync **s);
-long sync_execute(struct Sync *s, struct io_uring_sqe sqe);
-int fallocate(int fd, unsigned long new_size);
-int unlink(const char *pathname);
-int fstatx(int fd, struct statx *st);
-void atomic_add_unsigned(unsigned *ptr, unsigned value);
-void atomic_sub_unsigned(unsigned *ptr, unsigned value);
-long write_num(int fd, long num);
+
+static void *mmap(void *addr, unsigned long length, int prot, int flags, int fd,
+		  long offset);
+static int munmap(void *addr, unsigned long len);
+static int io_uring_setup(unsigned entries, struct io_uring_params *params);
+static int io_uring_enter2(unsigned fd, unsigned to_submit,
+			   unsigned min_complete, unsigned flags, void *arg,
+			   unsigned long sz);
+static long pwrite(int fd, const void *buf, unsigned len, long offset);
+static int open(const char *pathname, int flags, unsigned mode);
+static int close(int fd);
+static void sync_destroy(struct Sync *sync);
+static int sync_init(struct Sync **s);
+static long sync_execute(struct Sync *s, struct io_uring_sqe sqe);
+static int fallocate(int fd, unsigned long new_size);
+static int unlink(const char *pathname);
+static int fstatx(int fd, struct statx *st);
+static long write_num(int fd, long num);
 
 struct Sync *global_sync = 0;
 
@@ -233,27 +239,28 @@ void *memmove(void *dest, const void *src, unsigned long n) {
 
 void exit_group(int status) { syscall(231, status, 0, 0, 0, 0, 0); }
 
-void *mmap(void *addr, unsigned long length, int prot, int flags, int fd,
-	   long offset) {
+static void *mmap(void *addr, unsigned long length, int prot, int flags, int fd,
+		  long offset) {
 	return (void *)syscall(9, (long)addr, (long)length, prot, flags, fd,
 			       offset);
 }
 
-int munmap(void *addr, unsigned long len) {
+static int munmap(void *addr, unsigned long len) {
 	return (int)syscall(11, (long)addr, (long)len, 0, 0, 0, 0);
 }
 
-int io_uring_setup(unsigned entries, struct io_uring_params *params) {
+static int io_uring_setup(unsigned entries, struct io_uring_params *params) {
 	return (int)syscall(425, entries, (long)params, 0, 0, 0, 0);
 }
 
-int io_uring_enter2(unsigned fd, unsigned to_submit, unsigned min_complete,
-		    unsigned flags, void *arg, unsigned long sz) {
+static int io_uring_enter2(unsigned fd, unsigned to_submit,
+			   unsigned min_complete, unsigned flags, void *arg,
+			   unsigned long sz) {
 	return (int)syscall(426, fd, to_submit, min_complete, flags, (long)arg,
 			    (long)sz);
 }
 
-void sync_destroy(struct Sync *sync) {
+static void sync_destroy(struct Sync *sync) {
 	if (sync) {
 		if (sync->sq_ring) munmap(sync->sq_ring, sync->sq_ring_size);
 		sync->sq_ring = 0;
@@ -267,7 +274,7 @@ void sync_destroy(struct Sync *sync) {
 	}
 }
 
-int sync_init(struct Sync **s) {
+static int sync_init(struct Sync **s) {
 	struct Sync *sync;
 
 	sync = mmap(0, sizeof(struct Sync), 3, 33, -1, 0);
@@ -330,7 +337,7 @@ int sync_init(struct Sync **s) {
 	return 0;
 }
 
-long sync_execute(struct Sync *sync, struct io_uring_sqe sqe) {
+static long sync_execute(struct Sync *sync, struct io_uring_sqe sqe) {
 	long ret;
 	unsigned cq_mask, sq_mask, sq_tail, index, cq_head, idx;
 
@@ -356,7 +363,7 @@ long sync_execute(struct Sync *sync, struct io_uring_sqe sqe) {
 	return ret;
 }
 
-long pwrite(int fd, const void *buf, unsigned len, long offset) {
+static long pwrite(int fd, const void *buf, unsigned len, long offset) {
 	int res;
 	struct io_uring_sqe sqe = {0};
 
@@ -374,7 +381,7 @@ long pwrite(int fd, const void *buf, unsigned len, long offset) {
 	return sync_execute(global_sync, sqe);
 }
 
-int open(const char *path, int flags, unsigned mode) {
+static int open(const char *path, int flags, unsigned mode) {
 	int res;
 	struct open_how how;
 	struct io_uring_sqe sqe = {0};
@@ -394,7 +401,7 @@ int open(const char *path, int flags, unsigned mode) {
 	return (int)sync_execute(global_sync, sqe);
 }
 
-int close(int fd) {
+static int close(int fd) {
 	int res;
 	struct io_uring_sqe sqe = {0};
 	sqe.opcode = 19;
@@ -406,7 +413,7 @@ int close(int fd) {
 	return (int)sync_execute(global_sync, sqe);
 }
 
-int fallocate(int fd, unsigned long new_size) {
+static int fallocate(int fd, unsigned long new_size) {
 	int res;
 	struct io_uring_sqe sqe = {0};
 	sqe.opcode = 17;
@@ -417,7 +424,7 @@ int fallocate(int fd, unsigned long new_size) {
 	return (int)sync_execute(global_sync, sqe);
 }
 
-int fstatx(int fd, struct statx *st) {
+static int fstatx(int fd, struct statx *st) {
 	int res;
 	struct io_uring_sqe sqe = {0};
 	sqe.opcode = 21;
@@ -431,7 +438,7 @@ int fstatx(int fd, struct statx *st) {
 	return (int)sync_execute(global_sync, sqe);
 }
 
-int unlink(const char *pathname) {
+static int unlink(const char *pathname) {
 	int res;
 	struct io_uring_sqe sqe = {0};
 	sqe.opcode = 36;
@@ -442,7 +449,7 @@ int unlink(const char *pathname) {
 	return (int)sync_execute(global_sync, sqe);
 }
 
-long write_num(int fd, long num) {
+static long write_num(int fd, long num) {
 	unsigned char buf[21];
 	unsigned char *p;
 	unsigned long len;
