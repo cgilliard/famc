@@ -326,11 +326,13 @@ struct parse_node {
 	void *node_data;
 };
 
+#define PARSER_STACK_MAX 128
+
 struct parser {
 	struct parser_node *root;
 	struct parser_node *current;
 	int sp;
-	struct parser_node stack[PARSER_STACK_MAX];
+	struct parse_node stack[PARSER_STACK_MAX];
 };
 
 #define EPERM 1	   /* Operation not permitted */
