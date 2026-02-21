@@ -311,6 +311,17 @@ struct lexer {
 		IS_ALPHA(ret, ch); \
 		ret = !ret;        \
 	} while (0);
+#define IS_NUM(ret, ch, hex, bin)                              \
+	do {                                                   \
+		ret = 0;                                       \
+		if (ch >= '0' && ch <= '9')                    \
+			ret = 1;                               \
+		else if (hex && ((ch >= 'a' && ch <= 'f') ||   \
+				 (ch >= 'A' && ch <= 'F')))    \
+			ret = 1;                               \
+		if (bin && !(ch == '0' || ch == '1')) ret = 0; \
+	} while (0);
+
 #define READ_IDENT(t, l)                           \
 	do {                                       \
 		const char *in__ = l->in + l->off; \
@@ -324,14 +335,56 @@ struct lexer {
 		t->off = l->off;                   \
 		l->off += t->len;                  \
 	} while (0);
-#define SET_MATCH(t, l, mlen, mtype)       \
-	do {                               \
-		t->off = l->off;           \
-		t->len = mlen;             \
-		t->type = mtype;           \
-		t->line_num = l->line_num; \
-		l->off += mlen;            \
-		return;                    \
+#define READ_NUMBER(t, l)                                       \
+	do {                                                    \
+		int counter__ = 0, hex__ = 0, res__, bin__ = 0; \
+		const char *in__ = l->in + l->off;              \
+		while (++in__ != l->end) {                      \
+			if (counter__ == 0) {                   \
+				if (*in__ == 'x') {             \
+					hex__ = 1;              \
+					counter__++;            \
+					continue;               \
+				} else if (*in__ == 'b') {      \
+					bin__ = 1;              \
+					counter__++;            \
+					continue;               \
+				}                               \
+			}                                       \
+			IS_NUM(res__, *in__, hex__, bin__);     \
+			if (!res__) {                           \
+				break;                          \
+			}                                       \
+			counter__++;                            \
+		}                                               \
+		t->len = in__ - (l->in + l->off);               \
+		if ((hex__ || bin__) && t->len <= 2)            \
+			t->type = token_type_error;             \
+		else                                            \
+			t->type = token_type_num_literal;       \
+		t->off = l->off;                                \
+		l->off += t->len;                               \
+	} while (0);
+#define SET_MATCH(t, l, mlen, mtype) \
+	do {                         \
+		t->off = l->off;     \
+		t->len = mlen;       \
+		t->type = mtype;     \
+		l->off += mlen;      \
+		return;              \
+	} while (0);
+
+#define LEXER_SKIP_WHITESPACE(l)                                              \
+	do {                                                                  \
+		const char *in__ = l->in + l->off;                            \
+		while (in__ != l->end) {                                      \
+			if (*in__ != ' ' && *in__ != '\t' && *in__ != '\r' && \
+			    *in__ != '\n' && *in__ != '\v' && *in__ != '\f')  \
+				break;                                        \
+			if (*in__ == '\n') l->line_num++;                     \
+			in__++;                                               \
+		}                                                             \
+		l->off += in__ - (l->in + l->off);                            \
 	} while (0);
 
 void *memset(void *dest, int c, unsigned long n);
@@ -649,23 +702,12 @@ static int write_str(int fd, char *s) {
 	return 0;
 }
 
-static void lexer_skip_whitespace(struct lexer *l) {
-	const char *in = l->in + l->off;
-	while (in != l->end) {
-		if (*in != ' ' && *in != '\t' && *in != '\r' && *in != '\n' &&
-		    *in != '\v' && *in != '\f')
-			break;
-		if (*in == '\n') l->line_num++;
-		in++;
-	}
-	l->off += in - (l->in + l->off);
-}
-
 static void lexer_next_token(struct token *t, struct lexer *l) {
 	int is_alpha;
 	const char *in;
-	lexer_skip_whitespace(l);
+	LEXER_SKIP_WHITESPACE(l);
 	in = l->in + l->off;
+	t->line_num = l->line_num;
 
 	if (*in == ';') {
 		SET_MATCH(t, l, 1, token_type_semi);
@@ -702,9 +744,11 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 	} else if (*in == '/') {
 		if (in + 1 != l->end) {
 			if (*(in + 1) == '*') {
-				while (++in != l->end)
+				while (++in != l->end) {
+					if (*in == '\n') l->line_num++;
 					if (*in == '/' && *(in - 1) == '*')
 						break;
+				}
 				if (in == l->end) {
 					SET_MATCH(t, l, in - (l->in + l->off),
 						  token_type_error);
@@ -1199,11 +1243,7 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 	ident:
 		READ_IDENT(t, l);
 	} else if (*in >= '0' && *in <= '9') {
-		t->off = l->off;
-		while (++in != l->end && (*in >= '0' && *in <= '9'));
-		l->off = in - l->in;
-		t->type = token_type_num_literal;
-		t->len = l->off - t->off;
+		READ_NUMBER(t, l);
 	} else if (in >= l->end) {
 		t->type = token_type_term;
 		t->len = 0;
