@@ -266,6 +266,15 @@ enum node_kind {
 	token_type_char_literal,
 	token_type_string_literal,
 	token_type_comment,
+	node_kind_program,
+	node_kind_func_def,
+	node_kind_decl_var,
+	node_kind_type_basic,
+	node_kind_decl_param_list,
+	node_kind_decl_param,
+	node_kind_type_pointer,
+	node_kind_stmt_compound,
+	node_kind_stmt_return,
 	token_type_term
 };
 
@@ -276,11 +285,52 @@ struct source_location {
 	unsigned long col;
 };
 
+struct func_def_data {
+	struct parse_node *return_type;
+	struct parse_node *name;
+	struct parse_node *params;
+	struct parse_node *body;
+};
+
+struct decl_var_data {
+	struct parse_node *type;
+	struct parse_node *name;
+	struct parse_node *init;
+	int storage_class;
+	int qualifiers;
+};
+
+struct type_basic_data {
+	int basic_type;
+	int qualifiers;
+	int signedness;
+};
+
+struct decl_param_data {
+	struct parse_node *type;
+	struct parse_node *name;
+};
+
+struct type_pointer_data {
+	struct parse_node *base_type;
+	int qualifiers;
+	int levels;
+};
+
 struct parse_node {
 	enum node_kind type;
 	struct source_location loc;
+	struct parse_node *parent;
 	struct parse_node *first_child;
 	struct parse_node *next_sibling;
+	void *node_data;
+};
+
+struct parser {
+	struct parser_node *root;
+	struct parser_node *current;
+	int sp;
+	struct parser_node stack[PARSER_STACK_MAX];
 };
 
 #define EPERM 1	   /* Operation not permitted */
