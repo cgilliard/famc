@@ -705,6 +705,13 @@ static int write_str(int fd, char *s) {
 	return 0;
 }
 
+static unsigned long cycle_counter(void) {
+	unsigned lo, hi;
+	__atomic_thread_fence(__ATOMIC_SEQ_CST);
+	__asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
+	return ((unsigned long)hi << 32) | lo;
+}
+
 static void lexer_next_token(struct token *t, struct lexer *l) {
 	int is_alpha;
 	const char *in;
@@ -1281,6 +1288,7 @@ int main(int argc, char **argv, char **envp) {
 	struct lexer l;
 	struct statx st;
 	int fd;
+	unsigned long cc;
 
 	if (argc < 2) {
 		write_str(2, "Usage: famc <file>\n");
@@ -1310,8 +1318,10 @@ int main(int argc, char **argv, char **envp) {
 		exit_group(-1);
 	}
 
+	cc = cycle_counter();
 	while (1) {
 		lexer_next_token(&t, &l);
+		/*
 		write_str(1, "token=");
 		write_num(1, t.type);
 		write_str(1, ",offset=");
@@ -1323,8 +1333,13 @@ int main(int argc, char **argv, char **envp) {
 		write_str(1, ",col=");
 		write_num(1, t.col_num);
 		write_str(1, "\n");
+		*/
 		if (t.type == token_type_term) break;
 	}
+	cc = cycle_counter() - cc;
+	write_str(1, "lexer cycles=");
+	write_num(1, cc);
+	write_str(1, "\n");
 
 	return 0;
 
