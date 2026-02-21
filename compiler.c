@@ -255,19 +255,50 @@ enum token_type {
 
 struct token {
 	enum token_type type;
-	long off;
-	long len;
-	long line_num;
-	long col_num;
+	unsigned long off;
+	unsigned long len;
+	unsigned long line_num;
+	unsigned long col_num;
 };
 
 struct lexer {
 	char *in;
 	char *end;
-	long off;
-	long len;
-	long line_num;
-	long col_start;
+	unsigned long off;
+	unsigned long len;
+	unsigned long line_num;
+	unsigned long col_start;
+};
+
+struct arena {
+	unsigned char *start;
+	unsigned char *current;
+	unsigned char *end;
+	unsigned long align;
+};
+
+enum node_kind {
+	node_kind_string_literal,
+	node_kind_char_literal,
+	node_kind_number_literal,
+	node_kind_while,
+	node_kind_goto,
+	node_kind_if,
+	node_kind_term
+};
+
+struct source_location {
+	unsigned long off;
+	unsigned long len;
+	unsigned long line;
+	unsigned long col;
+};
+
+struct parse_node {
+	enum node_kind kind;
+	struct source_location loc;
+	struct parse_node *first_child;
+	struct parse_node *next_sibling;
 };
 
 #define EPERM 1	   /* Operation not permitted */
@@ -394,6 +425,7 @@ void *memset(void *dest, int c, unsigned long n);
 void *memcpy(void *dest, const void *src, unsigned long n);
 void *memmove(void *dest, const void *src, unsigned long n);
 unsigned long strlen(const char *x);
+int strcmp(const char *x, const char *y);
 int strncmp(const char *x, const char *y, unsigned long n);
 void exit_group(int status);
 
@@ -423,6 +455,11 @@ unsigned long strlen(const char *x) {
 	const char *y = x;
 	while (*x) x++;
 	return x - y;
+}
+
+int strcmp(const char *x, const char *y) {
+	while (*x == *y && *x) x++, y++;
+	return *x > *y ? 1 : *y > *x ? -1 : 0;
 }
 
 int strncmp(const char *x, const char *y, unsigned long n) {
@@ -649,7 +686,13 @@ static int unlink(const char *pathname) {
 
 static void *fmap_ro(int fd, unsigned long size, unsigned long offset) {
 	void *v = mmap(0, size, 1, 1, fd, offset);
-	if (v == (void *)-1) return 0;
+	if ((long)v < 0) return 0;
+	return v;
+}
+
+static void *map(unsigned long length) {
+	void *v = mmap(0, length, 3, 0x22, -1, 0);
+	if ((long)v < 0) return 0;
 	return v;
 }
 
@@ -707,7 +750,6 @@ static int write_str(int fd, char *s) {
 
 static unsigned long cycle_counter(void) {
 	unsigned lo, hi;
-	__atomic_thread_fence(__ATOMIC_SEQ_CST);
 	__asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
 	return ((unsigned long)hi << 32) | lo;
 }
@@ -1283,10 +1325,45 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 	}
 }
 
+static int arena_init(struct arena **a, unsigned long size,
+		      unsigned long align) {
+	struct arena *ret;
+	if (size == 0 || align == 0 || (align & (align - 1)) != 0)
+		return -EINVAL;
+	if (align > (~0U)) return -EINVAL;
+	if (size + sizeof(struct arena) < size) return -ENOMEM;
+	ret = map(size + sizeof(struct arena));
+	if (!ret) return -ENOMEM;
+	ret->start = ((unsigned char *)(ret)) + sizeof(struct arena);
+	ret->end = ret->start + size;
+	ret->current =
+	    ((unsigned long)ret->start % align) == 0
+		? ret->start
+		: (unsigned char *)((unsigned long)(ret->start + (align - 1)) &
+				    ~(align - 1));
+	ret->align = align;
+	*a = ret;
+	return 0;
+}
+
+static void *arena_alloc(struct arena *a, unsigned long size) {
+	void *ret;
+	unsigned long to_alloc;
+	to_alloc = (size + (a->align - 1)) & ~(a->align - 1);
+	if (a->current > a->end - to_alloc || to_alloc > (unsigned long)a->end)
+		return 0;
+	ret = a->current;
+	a->current += to_alloc;
+	return ret;
+}
+
 int main(int argc, char **argv, char **envp) {
+	struct arena *a = 0;
 	struct token t = {0};
+	void *ast;
 	struct lexer l;
 	struct statx st;
+	int debug = 0;
 	int fd;
 	unsigned long cc;
 
@@ -1295,7 +1372,22 @@ int main(int argc, char **argv, char **envp) {
 		exit_group(-1);
 	}
 
-	fd = open(argv[1], 0, 0);
+	if (argc > 2) {
+		if (!strcmp(argv[1], "--debug"))
+			debug = 1;
+		else if (!strcmp(argv[1], "--perf"))
+			debug = 2;
+	}
+
+	if (arena_init(&a, 1024 * 1024 * 16, 8) < 0) {
+		write_str(2, "Could not allocate arena.\n");
+		exit_group(-1);
+	}
+
+	ast = arena_alloc(a, 8);
+	(void)ast;
+
+	fd = open(argv[argc - 1], 0, 0);
 
 	if (fd < 0) {
 		write_str(2, "Could not open file.\n");
@@ -1318,28 +1410,29 @@ int main(int argc, char **argv, char **envp) {
 		exit_group(-1);
 	}
 
-	cc = cycle_counter();
-	while (1) {
+	if (debug) cc = cycle_counter();
+	while (t.type != token_type_term) {
 		lexer_next_token(&t, &l);
-		/*
-		write_str(1, "token=");
-		write_num(1, t.type);
-		write_str(1, ",offset=");
-		write_num(1, t.off);
-		write_str(1, ",value='");
-		pwrite(1, l.in + t.off, t.len, 0);
-		write_str(1, "',line=");
-		write_num(1, t.line_num + 1);
-		write_str(1, ",col=");
-		write_num(1, t.col_num);
-		write_str(1, "\n");
-		*/
-		if (t.type == token_type_term) break;
+		if (debug == 1) {
+			write_str(1, "token=");
+			write_num(1, t.type);
+			write_str(1, ",offset=");
+			write_num(1, t.off);
+			write_str(1, ",value='");
+			pwrite(1, l.in + t.off, t.len, 0);
+			write_str(1, "',line=");
+			write_num(1, t.line_num + 1);
+			write_str(1, ",col=");
+			write_num(1, t.col_num);
+			write_str(1, "\n");
+		}
 	}
-	cc = cycle_counter() - cc;
-	write_str(1, "lexer cycles=");
-	write_num(1, cc);
-	write_str(1, "\n");
+	if (debug) {
+		cc = cycle_counter() - cc;
+		write_str(1, "lexer cycles=");
+		write_num(1, cc);
+		write_str(1, "\n");
+	}
 
 	return 0;
 
