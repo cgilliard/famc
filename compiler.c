@@ -322,15 +322,18 @@ struct parse_node {
 	struct source_location loc;
 	struct parse_node *parent;
 	struct parse_node *first_child;
+	struct parse_node *last_child;
 	struct parse_node *next_sibling;
+	struct parse_node *prev_sibling;
 	void *node_data;
 };
 
-#define PARSER_STACK_MAX 128
+#define PARSER_STACK_MAX 4096
 
 struct parser {
-	struct parser_node *root;
-	struct parser_node *current;
+	struct arena *a;
+	struct parse_node *root;
+	struct parse_node *current;
 	int sp;
 	struct parse_node stack[PARSER_STACK_MAX];
 };
@@ -770,7 +773,7 @@ static long write_num(int fd, long num) {
 	return 0;
 }
 
-static int write_str(int fd, char *s) {
+static int write_str(int fd, const char *s) {
 	long written;
 	unsigned long current = 0;
 	unsigned long len = strlen(s);
@@ -780,6 +783,12 @@ static int write_str(int fd, char *s) {
 		current += written;
 	}
 	return 0;
+}
+
+static void panic(const char *s) {
+	write_str(2, s);
+	write_str(2, "\n");
+	exit_group(-1);
 }
 
 static unsigned long cycle_counter(void) {
@@ -1384,22 +1393,137 @@ static void *arena_alloc(struct arena *a, unsigned long size) {
 	void *ret;
 	unsigned long to_alloc;
 	to_alloc = (size + (a->align - 1)) & ~(a->align - 1);
-	if (a->current > a->end - to_alloc || to_alloc > (unsigned long)a->end)
-		return 0;
+	if (a->current > a->end - to_alloc ||
+	    to_alloc > (unsigned long)a->end) {
+		write_str(2, "Could not allocate memory! Halting.\n");
+		exit_group(-1);
+	}
 	ret = a->current;
 	a->current += to_alloc;
 	return ret;
 }
 
-int main(int argc, char **argv, char **envp) {
-	struct arena *a = 0;
+/*struct parser {
+	struct arena *a;
+	struct parser_node *root;
+	struct parser_node *current;
+	int sp;
+	struct parse_node stack[PARSER_STACK_MAX];
+};
+struct parse_node {
+	enum node_kind type;
+	struct source_location loc;
+	struct parse_node *parent;
+	struct parse_node *first_child;
+	struct parse_node *next_sibling;
+	void *node_data;
+};
+
+*/
+
+#define PROC_PARAM_LIST(p, t)                       \
+	do {                                        \
+		write_str(2, "parse param list\n"); \
+	} while (0);
+
+#define PROC_FUNC_DECL(p, t)                                  \
+	do {                                                  \
+		write_str(2, "proc func decl\n");             \
+		if (p->sp < 1) panic("Unexpected token ')'"); \
+		PROC_PARAM_LIST(p, t);                        \
+	} while (0);
+
+#define PROC_LEFT_BRACE_PROGRAM(p, t)                                     \
+	do {                                                              \
+		write_str(2, "proc left brace prog\n");                   \
+		if (p->sp < 1) panic("Unexpected token '{'");             \
+		write_num(2, p->stack[p->sp - 1].type);                   \
+		write_str(2, "\n");                                       \
+		write_num(2, token_type_right_paren);                     \
+		write_str(2, "\n");                                       \
+		if (p->stack[p->sp - 1].type == token_type_right_paren) { \
+			p->sp--;                                          \
+			PROC_FUNC_DECL(p, t);                             \
+		}                                                         \
+	} while (0);
+
+#define PUSH_TOKEN(p, t)                                         \
+	do {                                                     \
+		if (p->sp >= PARSER_STACK_MAX) {                 \
+			write_str(2, "Parser stack overflow\n"); \
+			exit_group(1);                           \
+		}                                                \
+		p->stack[p->sp++] = *t;                          \
+	} while (0);
+
+#define PROC_LEFT_BRACE(p, t)                                               \
+	do {                                                                \
+		write_str(2, "proc left brace\n");                          \
+		if (p->current->parent == 0) PROC_LEFT_BRACE_PROGRAM(p, t); \
+	} while (0);
+
+int parse(struct parser *p, struct lexer *l, int debug) {
 	struct parse_node t = {0};
-	void *ast;
-	struct lexer l;
-	struct statx st;
-	int debug = 0;
-	int fd;
 	unsigned long cc;
+	if (debug) cc = cycle_counter();
+	while (t.type != token_type_term) {
+		lexer_next_token(&t, l);
+		if (debug == 1) {
+			write_str(1, "token=");
+			write_num(1, t.type);
+			write_str(1, ",offset=");
+			write_num(1, t.loc.off);
+			write_str(1, ",value='");
+			pwrite(1, l->in + t.loc.off, t.loc.len, 0);
+			write_str(1, "',line=");
+			write_num(1, t.loc.line + 1);
+			write_str(1, ",col=");
+			write_num(1, t.loc.col);
+			write_str(1, "\n");
+		}
+		switch (t.type) {
+			case token_type_left_paren:
+			case token_type_right_paren:
+			case token_type_comma:
+			case token_type_char:
+			case token_type_asterisk:
+			case token_type_return:
+			case token_type_num_literal:
+			case token_type_ident:
+			case token_type_int:
+				PUSH_TOKEN(p, (&t));
+				break;
+			case token_type_left_brace:
+				PROC_LEFT_BRACE(p, (&t));
+				break;
+			case token_type_right_brace:
+				break;
+			case token_type_semi:
+				break;
+			case token_type_term:
+				break;
+			default:
+				write_str(2, "default!\n");
+				break;
+		}
+	}
+	if (debug) {
+		cc = cycle_counter() - cc;
+		write_str(1, "lexer cycles=");
+		write_num(1, cc);
+		write_str(1, "\n");
+	}
+
+	return 0;
+
+	(void)p;
+}
+
+int main(int argc, char **argv, char **envp) {
+	struct lexer l;
+	struct parser p;
+	struct statx st;
+	int fd, debug = 0;
 
 	if (argc < 2) {
 		write_str(2, "Usage: famc <file>\n");
@@ -1413,13 +1537,14 @@ int main(int argc, char **argv, char **envp) {
 			debug = 2;
 	}
 
-	if (arena_init(&a, 1024 * 1024 * 16, 8) < 0) {
+	if (arena_init(&p.a, 1024 * 1024 * 16, 8) < 0) {
 		write_str(2, "Could not allocate arena.\n");
 		exit_group(-1);
 	}
 
-	ast = arena_alloc(a, 8);
-	(void)ast;
+	p.root = arena_alloc(p.a, sizeof(struct parse_node));
+	p.current = p.root;
+	p.sp = 0;
 
 	fd = open(argv[argc - 1], 0, 0);
 
@@ -1444,29 +1569,7 @@ int main(int argc, char **argv, char **envp) {
 		exit_group(-1);
 	}
 
-	if (debug) cc = cycle_counter();
-	while (t.type != token_type_term) {
-		lexer_next_token(&t, &l);
-		if (debug == 1) {
-			write_str(1, "token=");
-			write_num(1, t.type);
-			write_str(1, ",offset=");
-			write_num(1, t.loc.off);
-			write_str(1, ",value='");
-			pwrite(1, l.in + t.loc.off, t.loc.len, 0);
-			write_str(1, "',line=");
-			write_num(1, t.loc.line + 1);
-			write_str(1, ",col=");
-			write_num(1, t.loc.col);
-			write_str(1, "\n");
-		}
-	}
-	if (debug) {
-		cc = cycle_counter() - cc;
-		write_str(1, "lexer cycles=");
-		write_num(1, cc);
-		write_str(1, "\n");
-	}
+	parse(&p, &l, debug);
 
 	return 0;
 
