@@ -17,6 +17,7 @@ CSTRICT="-nostdlib \
 	-Wpointer-arith \
 	-Wredundant-decls \
 	-Wstrict-prototypes \
+	-Wno-implicit-function-declaration \
 	-pedantic"
 
 mkdir -p ${BIN_DIR};
