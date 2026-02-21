@@ -381,7 +381,10 @@ struct lexer {
 			if (*in__ != ' ' && *in__ != '\t' && *in__ != '\r' && \
 			    *in__ != '\n' && *in__ != '\v' && *in__ != '\f')  \
 				break;                                        \
-			if (*in__ == '\n') l->line_num++;                     \
+			if (*in__ == '\n') {                                  \
+				l->col_start = (in__ - l->in) + 1;            \
+				l->line_num++;                                \
+			}                                                     \
 			in__++;                                               \
 		}                                                             \
 		l->off += in__ - (l->in + l->off);                            \
@@ -708,6 +711,7 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 	LEXER_SKIP_WHITESPACE(l);
 	in = l->in + l->off;
 	t->line_num = l->line_num;
+	t->col_num = l->off - l->col_start;
 
 	if (*in == ';') {
 		SET_MATCH(t, l, 1, token_type_semi);
@@ -745,7 +749,10 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 		if (in + 1 != l->end) {
 			if (*(in + 1) == '*') {
 				while (++in != l->end) {
-					if (*in == '\n') l->line_num++;
+					if (*in == '\n') {
+						l->col_start = (in - l->in) + 1;
+						l->line_num++;
+					}
 					if (*in == '/' && *(in - 1) == '*')
 						break;
 				}
@@ -1193,7 +1200,12 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 		SET_MATCH(t, l, 5, token_type_while);
 	} else if (*in == '\"') {
 		while (++in != l->end)
-			if (*in == '\"' && *(in - 1) != '\\') break;
+			if (*in == '\"' && *(in - 1) != '\\')
+				break;
+			else if (*in == '\n') {
+				l->col_start = (in - l->in) + 1;
+				l->line_num++;
+			}
 		if (in != l->end) {
 			in++;
 			SET_MATCH(t, l, in - (l->in + l->off),
@@ -1209,8 +1221,7 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 		}
 		if (*in == '\'') {
 			SET_MATCH(t, l, 2, token_type_error);
-		}
-		if (*in == '\\') {
+		} else if (*in == '\\') {
 			if (++in == l->end) {
 				SET_MATCH(t, l, 2, token_type_error);
 			}
@@ -1220,6 +1231,10 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 			    *in != 't' && *in != 'v' && *in != '0') {
 				while (in != l->end) {
 					if (*in == '\'') break;
+					if (*in == '\n') {
+						l->col_start = (in - l->in) + 1;
+						l->line_num++;
+					}
 					++in;
 				}
 				++in;
@@ -1227,10 +1242,17 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 					  token_type_error);
 			}
 			match_len = 4;
+		} else if (*in == '\n') {
+			l->col_start = (in - l->in) + 1;
+			l->line_num++;
 		}
 		if (++in == l->end || *in != '\'') {
 			while (in != l->end) {
 				if (*in == '\'') break;
+				if (*in == '\n') {
+					l->col_start = (in - l->in) + 1;
+					l->line_num++;
+				}
 				++in;
 			}
 			++in;
@@ -1298,6 +1320,8 @@ int main(int argc, char **argv, char **envp) {
 		pwrite(1, l.in + t.off, t.len, 0);
 		write_str(1, "',line=");
 		write_num(1, t.line_num + 1);
+		write_str(1, ",col=");
+		write_num(1, t.col_num);
 		write_str(1, "\n");
 		if (t.type == token_type_term) break;
 	}
@@ -1306,7 +1330,6 @@ int main(int argc, char **argv, char **envp) {
 
 	(void)fallocate;
 	(void)unlink;
-	(void)write_num;
 	(void)envp;
 	(void)close;
 }
