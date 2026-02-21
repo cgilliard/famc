@@ -163,7 +163,23 @@ struct Sync {
 	unsigned *cq_mask;
 };
 
-enum token_type {
+struct lexer {
+	char *in;
+	char *end;
+	unsigned long off;
+	unsigned long len;
+	unsigned long line_num;
+	unsigned long col_start;
+};
+
+struct arena {
+	unsigned char *start;
+	unsigned char *current;
+	unsigned char *end;
+	unsigned long align;
+};
+
+enum node_kind {
 	token_type_error,
 	token_type_semi,
 	token_type_comma,
@@ -253,40 +269,6 @@ enum token_type {
 	token_type_term
 };
 
-struct token {
-	enum token_type type;
-	unsigned long off;
-	unsigned long len;
-	unsigned long line_num;
-	unsigned long col_num;
-};
-
-struct lexer {
-	char *in;
-	char *end;
-	unsigned long off;
-	unsigned long len;
-	unsigned long line_num;
-	unsigned long col_start;
-};
-
-struct arena {
-	unsigned char *start;
-	unsigned char *current;
-	unsigned char *end;
-	unsigned long align;
-};
-
-enum node_kind {
-	node_kind_string_literal,
-	node_kind_char_literal,
-	node_kind_number_literal,
-	node_kind_while,
-	node_kind_goto,
-	node_kind_if,
-	node_kind_term
-};
-
 struct source_location {
 	unsigned long off;
 	unsigned long len;
@@ -295,7 +277,7 @@ struct source_location {
 };
 
 struct parse_node {
-	enum node_kind kind;
+	enum node_kind type;
 	struct source_location loc;
 	struct parse_node *first_child;
 	struct parse_node *next_sibling;
@@ -353,18 +335,18 @@ struct parse_node {
 		if (bin && !(ch == '0' || ch == '1')) ret = 0; \
 	} while (0);
 
-#define READ_IDENT(t, l)                           \
-	do {                                       \
-		const char *in__ = l->in + l->off; \
-		while (++in__ != l->end) {         \
-			int res__;                 \
-			IS_ALPHA(res__, *in__);    \
-			if (!res__) break;         \
-		}                                  \
-		t->type = token_type_ident;        \
-		t->len = in__ - (l->in + l->off);  \
-		t->off = l->off;                   \
-		l->off += t->len;                  \
+#define READ_IDENT(t, l)                              \
+	do {                                          \
+		const char *in__ = l->in + l->off;    \
+		while (++in__ != l->end) {            \
+			int res__;                    \
+			IS_ALPHA(res__, *in__);       \
+			if (!res__) break;            \
+		}                                     \
+		t->type = token_type_ident;           \
+		t->loc.len = in__ - (l->in + l->off); \
+		t->loc.off = l->off;                  \
+		l->off += t->loc.len;                 \
 	} while (0);
 #define READ_NUMBER(t, l)                                       \
 	do {                                                    \
@@ -388,18 +370,18 @@ struct parse_node {
 			}                                       \
 			counter__++;                            \
 		}                                               \
-		t->len = in__ - (l->in + l->off);               \
-		if ((hex__ || bin__) && t->len <= 2)            \
+		t->loc.len = in__ - (l->in + l->off);           \
+		if ((hex__ || bin__) && t->loc.len <= 2)        \
 			t->type = token_type_error;             \
 		else                                            \
 			t->type = token_type_num_literal;       \
-		t->off = l->off;                                \
-		l->off += t->len;                               \
+		t->loc.off = l->off;                            \
+		l->off += t->loc.len;                           \
 	} while (0);
 #define SET_MATCH(t, l, mlen, mtype) \
 	do {                         \
-		t->off = l->off;     \
-		t->len = mlen;       \
+		t->loc.off = l->off; \
+		t->loc.len = mlen;   \
 		t->type = mtype;     \
 		l->off += mlen;      \
 		return;              \
@@ -754,13 +736,13 @@ static unsigned long cycle_counter(void) {
 	return ((unsigned long)hi << 32) | lo;
 }
 
-static void lexer_next_token(struct token *t, struct lexer *l) {
+static void lexer_next_token(struct parse_node *t, struct lexer *l) {
 	int is_alpha;
 	const char *in;
 	LEXER_SKIP_WHITESPACE(l);
 	in = l->in + l->off;
-	t->line_num = l->line_num;
-	t->col_num = l->off - l->col_start;
+	t->loc.line = l->line_num;
+	t->loc.col = l->off - l->col_start;
 
 	if (*in == ';') {
 		SET_MATCH(t, l, 1, token_type_semi);
@@ -1317,9 +1299,9 @@ static void lexer_next_token(struct token *t, struct lexer *l) {
 		READ_NUMBER(t, l);
 	} else if (in >= l->end) {
 		t->type = token_type_term;
-		t->len = 0;
-		t->off = l->end - l->in;
-		t->line_num = l->line_num;
+		t->loc.len = 0;
+		t->loc.off = l->end - l->in;
+		t->loc.line = l->line_num;
 	} else {
 		SET_MATCH(t, l, 1, token_type_error);
 	}
@@ -1359,7 +1341,7 @@ static void *arena_alloc(struct arena *a, unsigned long size) {
 
 int main(int argc, char **argv, char **envp) {
 	struct arena *a = 0;
-	struct token t = {0};
+	struct parse_node t = {0};
 	void *ast;
 	struct lexer l;
 	struct statx st;
@@ -1417,13 +1399,13 @@ int main(int argc, char **argv, char **envp) {
 			write_str(1, "token=");
 			write_num(1, t.type);
 			write_str(1, ",offset=");
-			write_num(1, t.off);
+			write_num(1, t.loc.off);
 			write_str(1, ",value='");
-			pwrite(1, l.in + t.off, t.len, 0);
+			pwrite(1, l.in + t.loc.off, t.loc.len, 0);
 			write_str(1, "',line=");
-			write_num(1, t.line_num + 1);
+			write_num(1, t.loc.line + 1);
 			write_str(1, ",col=");
-			write_num(1, t.col_num);
+			write_num(1, t.loc.col);
 			write_str(1, "\n");
 		}
 	}
