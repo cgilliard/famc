@@ -826,6 +826,20 @@ void node_print_impl(struct node *n, long depth) {
 		write_str(1, " (struct) [");
 		write(&r, 1, s->ptr, s->len);
 		write_str(1, "]");
+	} else if (n->kind == nk_enum) {
+		long r;
+		struct slice *s = n->node_data;
+		write_str(1, " (enum) [");
+		write(&r, 1, s->ptr, s->len);
+		write_str(1, "]");
+	} else if (n->kind == nk_asm) {
+		write_str(1, " (asm)");
+	} else if (n->kind == nk_str_lit) {
+		long r;
+		struct slice *s = n->node_data;
+		write_str(1, " (string literal) [");
+		write(&r, 1, s->ptr, s->len);
+		write_str(1, "]");
 	} else if (n->kind == nk_type) {
 		long r;
 		struct type_data *td = n->node_data;
@@ -834,6 +848,8 @@ void node_print_impl(struct node *n, long depth) {
 			write_str(1, "char");
 		else if (td->kind == nk_long)
 			write_str(1, "long");
+		else if (td->kind == nk_void)
+			write_str(1, "void");
 		else if (td->kind == nk_struct)
 			write_str(1, "struct ");
 		else if (td->kind == nk_enum)
@@ -848,7 +864,12 @@ void node_print_impl(struct node *n, long depth) {
 		write_str(1, ") [");
 		write(&r, 1, td->field_name.ptr, td->field_name.len);
 		write_str(1, "]");
-
+	} else if (n->kind == nk_ident) {
+		long r;
+		struct slice *s = n->node_data;
+		write_str(1, " (ident) [");
+		write(&r, 1, s->ptr, s->len);
+		write_str(1, "]");
 	} else if (n->kind == nk_program)
 		write_str(1, " (program)");
 	write_str(1, "\n");
@@ -861,20 +882,9 @@ void node_print_impl(struct node *n, long depth) {
 
 void node_print(struct node *n) { node_print_impl(n, 0); }
 
-void proc_nk_right_paren(struct parser *p, struct lexer *l, struct node *n) {
-	(void)p;
-	(void)l;
-	(void)n;
-	/*p->sp = 0;*/
-
-	p->stack[p->sp++] = *n;
-}
-
 void proc_struct(struct parser *p, struct lexer *l, struct node *n) {
 	struct node *str_node;
-	write_str(2, "proc struct\n");
 	(void)n;
-	(void)p;
 	(void)l;
 
 	arena_alloc((void *)&str_node, p->a, sizeof(struct node));
@@ -885,9 +895,7 @@ void proc_struct(struct parser *p, struct lexer *l, struct node *n) {
 
 void proc_enum(struct parser *p, struct lexer *l, struct node *n) {
 	struct node *str_node;
-	write_str(2, "proc enum\n");
 	(void)n;
-	(void)p;
 	(void)l;
 
 	arena_alloc((void *)&str_node, p->a, sizeof(struct node));
@@ -898,10 +906,6 @@ void proc_enum(struct parser *p, struct lexer *l, struct node *n) {
 
 void proc_nk_left_brace_root(struct parser *p, struct lexer *l,
 			     struct node *n) {
-	write_str(2, "brace root\n");
-	write_num(2, p->sp);
-	write_str(2, "\n");
-
 	if (p->sp >= 3) {
 		if (p->stack[p->sp - 3].kind == nk_struct)
 			proc_struct(p, l, n);
@@ -924,9 +928,6 @@ void proc_struct_elem(struct parser *p, struct lexer *l, struct node *n) {
 	long name_len;
 	long levels = 0;
 
-	write_num(2, p->stack[p->sp].kind);
-	write_str(2, "\n");
-
 	if (p->sp == 0) panic("sp=0");
 	if (p->stack[p->sp].kind != nk_semi) panic("expected semi");
 	p->sp--;
@@ -945,8 +946,12 @@ void proc_struct_elem(struct parser *p, struct lexer *l, struct node *n) {
 	}
 
 	if (p->stack[p->sp].kind == nk_char ||
-	    p->stack[p->sp].kind == nk_long) {
+	    p->stack[p->sp].kind == nk_long ||
+	    p->stack[p->sp].kind == nk_void) {
 		struct node *field;
+
+		if (p->stack[p->sp].kind == nk_void && levels == 0)
+			panic("type cannot be void, only void *");
 		arena_alloc((void *)&field, p->a, sizeof(struct node));
 		field->kind = nk_type;
 		arena_alloc(&field->node_data, p->a, sizeof(struct type_data));
@@ -967,7 +972,6 @@ void proc_struct_elem(struct parser *p, struct lexer *l, struct node *n) {
 			       p->stack[p->sp - 1].kind != nk_enum))
 			panic("expected struct or enum");
 
-		write_str(1, "add struct/enum");
 		arena_alloc((void *)&field, p->a, sizeof(struct node));
 		field->kind = nk_type;
 		arena_alloc(&field->node_data, p->a, sizeof(struct type_data));
@@ -996,11 +1000,6 @@ void proc_struct_complete(struct parser *p, struct lexer *l, struct node *n) {
 	struct slice *s;
 	(void)p;
 	(void)l;
-	(void)n;
-
-	write_str(2, "proc_struct complete\ncount=");
-	write_num(2, p->sp);
-	write_str(2, "\n");
 
 	p->sp -= 2;
 	while (p->sp >= 0) {
@@ -1019,13 +1018,59 @@ void proc_struct_complete(struct parser *p, struct lexer *l, struct node *n) {
 	p->current = p->current->parent;
 }
 
+void proc_enum_elem(struct parser *p, struct lexer *l, struct node *n) {
+	(void)p;
+	(void)l;
+	(void)n;
+	p->sp--;
+}
+
+void proc_enum_complete(struct parser *p, struct lexer *l, struct node *n) {
+	struct slice *name;
+	(void)p;
+	(void)l;
+	(void)n;
+
+	p->sp -= 2;
+	while (p->sp >= 0) {
+		struct slice *s;
+		struct node *nnode;
+		if (p->stack[p->sp].kind == nk_left_brace) break;
+		if (p->stack[p->sp].kind != nk_ident) panic("expected ident");
+
+		arena_alloc((void *)&s, p->a, sizeof(struct slice));
+		s->ptr = p->in + p->stack[p->sp].loc.off;
+		s->len = p->stack[p->sp].loc.len;
+		arena_alloc((void *)&nnode, p->a, sizeof(struct node));
+		node_init(nnode, nk_ident);
+		nnode->node_data = s;
+		node_append(p->current, nnode, 1);
+
+		p->sp--;
+		if (p->sp == 0 && p->stack[p->sp].kind == nk_left_brace)
+			panic("expected comma or brace");
+		if (p->stack[p->sp].kind == nk_left_brace) break;
+
+		p->sp--;
+	}
+	p->sp--;
+	if (p->sp < 1) panic("expected additional enum tokens");
+	if (p->stack[p->sp].kind != nk_ident) panic("expected ident");
+
+	arena_alloc((void *)&name, p->a, sizeof(struct slice));
+	name->ptr = p->in + p->stack[p->sp].loc.off;
+	name->len = p->stack[p->sp].loc.len;
+	p->current->node_data = name;
+	p->current = p->current->parent;
+}
+
 void proc_nk_right_brace(struct parser *p, struct lexer *l, struct node *n) {
 	(void)p;
 	(void)l;
 	(void)n;
 
-	write_str(2, "right brace\n");
 	if (p->current->kind == nk_struct) proc_struct_complete(p, l, n);
+	if (p->current->kind == nk_enum) proc_enum_complete(p, l, n);
 
 	p->sp = 0;
 }
@@ -1036,6 +1081,54 @@ void proc_nk_semi(struct parser *p, struct lexer *l, struct node *n) {
 	(void)n;
 	if (p->current == p->root) p->sp = 0;
 }
+
+void proc_nk_asm_complete(struct parser *p, struct lexer *l, struct node *n) {
+	(void)l;
+	(void)n;
+	p->sp -= 2;
+	while (p->sp > 0 && p->stack[p->sp].kind != nk_left_paren) {
+		struct node *nnode;
+		struct slice *s;
+		if (p->stack[p->sp].kind != nk_str_lit)
+			panic("expected stringlit");
+
+		arena_alloc((void *)&nnode, p->a, sizeof(struct node));
+		arena_alloc((void *)&s, p->a, sizeof(struct slice));
+		node_init(nnode, nk_str_lit);
+		s->ptr = p->in + p->stack[p->sp].loc.off;
+		s->len = p->stack[p->sp].loc.len;
+		nnode->node_data = s;
+		node_append(p->current, nnode, 1);
+
+		p->sp--;
+	}
+
+	p->current = p->current->parent;
+}
+
+void proc_nk_right_paren(struct parser *p, struct lexer *l, struct node *n) {
+	if (p->current->kind == nk_asm) proc_nk_asm_complete(p, l, n);
+}
+
+void proc_nk_left_paren_root(struct parser *p, struct lexer *l,
+			     struct node *n) {
+	struct node *asm_node;
+	(void)p;
+	(void)l;
+	(void)n;
+	if (p->sp < 2) panic("unexpected token '('");
+	if (p->stack[p->sp - 2].kind != nk_asm) panic("invalid token");
+
+	arena_alloc((void *)&asm_node, p->a, sizeof(struct node));
+	node_init(asm_node, nk_asm);
+	node_append(p->root, asm_node, 0);
+	p->current = asm_node;
+}
+
+void proc_nk_left_paren(struct parser *p, struct lexer *l, struct node *n) {
+	if (p->current == p->root) proc_nk_left_paren_root(p, l, n);
+}
+
 void parse(struct parser *p, struct lexer *l, long debug) {
 	long cc, r, cap;
 	struct node next;
@@ -1069,6 +1162,8 @@ void parse(struct parser *p, struct lexer *l, long debug) {
 				panic("Stack overflow!");
 			if (next.kind == nk_right_paren)
 				proc_nk_right_paren(p, l, &next);
+			else if (next.kind == nk_left_paren)
+				proc_nk_left_paren(p, l, &next);
 			else if (next.kind == nk_left_brace)
 				proc_nk_left_brace(p, l, &next);
 			else if (next.kind == nk_right_brace)
