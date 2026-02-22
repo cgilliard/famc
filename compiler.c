@@ -170,7 +170,7 @@ struct parser {
 	struct node *current;
 	long scope;
 	long sp;
-	struct node stack[4096];
+	struct node *stack;
 };
 
 void memmove(void *dest, void *src, long n) {
@@ -1188,11 +1188,9 @@ void proc_nk_left_paren(struct parser *p, struct lexer *l, struct node *n) {
 	if (p->current == p->root) proc_nk_left_paren_root(p, l, n);
 }
 
-void parse(struct parser *p, struct lexer *l, long debug) {
-	long cc, r, cap;
+void parse(struct parser *p, struct lexer *l, long debug, long cap) {
+	long cc, r;
 	struct node next;
-
-	div(&cap, sizeof(p->stack), sizeof(p->stack[0]));
 
 	if (debug) cycle_counter(&cc);
 	while (1) {
@@ -1290,13 +1288,15 @@ void main(long argc, char **argv) {
 	node_init(p.root, nk_program);
 	p.current = p.root;
 	p.sp = 0;
+	map((void *)&p.stack, sizeof(struct node) * 4096);
+	if (!p.stack) panic("could not allocate stack");
 
 	l.end = l.in + size;
 	l.off = 0;
 	l.col_start = 0;
 	l.line = 0;
 
-	parse(&p, &l, debug);
+	parse(&p, &l, debug, 4096);
 	if (debug == 1) node_print(p.root);
 
 	write_str(1, "success!\n");
