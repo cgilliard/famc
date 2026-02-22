@@ -1,7 +1,15 @@
 struct x {
-	long xabc;
+	long *xabc;
 	char ydef;
+	char *zzz;
+	enum pabc *n;
+	struct vvv *****ggg;
+	long ***v;
+	long y1;
+	struct v11 p22;
 };
+
+enum yyy { abc, def };
 
 /*
 enum y { abc, def, ghi };
