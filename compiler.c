@@ -121,6 +121,13 @@ enum node_kind {
 	nk_str_lit,
 	nk_comment,
 	nk_ident,
+	nk_program,
+	nk_func_def,
+	nk_declarator,
+	nk_param_list,
+	nk_param,
+	nk_decl_spec,
+	nk_pointer,
 	nk_term
 };
 
@@ -131,24 +138,42 @@ struct source_location {
 	long col;
 };
 
+struct func_def_data {
+	char *name;
+	long name_len;
+};
+
+struct param_data {
+	char *name;
+	long name_len;
+	enum node_kind kind;
+	long ptr_level;
+};
+
 struct node {
 	enum node_kind type;
 	struct source_location loc;
-	struct parse_node *parent;
-	struct parse_node *first_child;
-	struct parse_node *last_child;
-	struct parse_node *next_sibling;
-	struct parse_node *prev_sibling;
+	struct node *parent;
+	struct node *first_child;
+	struct node *last_child;
+	struct node *next_sibling;
+	struct node *prev_sibling;
 	void *node_data;
 };
 
 struct parser {
+	char *in;
 	struct arena *a;
 	struct node *root;
 	struct node *current;
 	long sp;
 	struct node stack[4096];
 };
+
+void memset(void *dest, char c, long n) {
+	char *tmp = dest;
+	while (n--) *tmp++ = (char)c;
+}
 
 void strlen(long *ret, char *x) {
 	char *y = x;
@@ -274,6 +299,33 @@ void write_num(long *ret, long fd, long num) {
 	else
 		*ret = 0;
 end:;
+}
+
+void arena_init(struct arena **a, long size, long align) {
+	struct arena *ret;
+	map((void *)&ret, size + sizeof(struct arena));
+	if (!ret) panic("Could not mmap sufficient memory! Halting.\n");
+	ret->start = ((char *)(ret)) + sizeof(struct arena);
+	ret->end = ret->start + size;
+	if (((long)ret->start % align) == 0)
+		ret->current = ret->start;
+	else
+		ret->current =
+		    (char *)((long)(ret->start + (align - 1)) & ~(align - 1));
+	ret->align = align;
+	*a = ret;
+}
+
+void arena_alloc(void **result, struct arena *a, long size) {
+	void *ret;
+	long to_alloc;
+	to_alloc = (size + (a->align - 1)) & ~(a->align - 1);
+	if (a->current > a->end - to_alloc || to_alloc > (long)a->end)
+		panic("Could not allocate memory! Halting.\n");
+
+	ret = a->current;
+	a->current += to_alloc;
+	*result = ret;
 }
 
 void lexer_next_token(struct node *next, struct lexer *l) {
@@ -759,13 +811,136 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 end:;
 }
 
-void parse(struct parser *p, struct lexer *l, long debug) {
-	long r;
-	long cc;
-	struct node next;
-	(void)p;
+void node_append(struct node *parent, struct node *child, long prepend) {
+	child->parent = parent;
+	if (parent->last_child) {
+		if (prepend)
+			parent->first_child->prev_sibling = child;
+		else
+			parent->last_child->next_sibling = child;
+	} else {
+		if (prepend)
+			parent->last_child = child;
+		else
+			parent->first_child = child;
+	}
+	if (prepend) {
+		child->prev_sibling = parent->first_child;
+		parent->first_child = child;
+	} else {
+		child->prev_sibling = parent->last_child;
+		parent->last_child = child;
+	}
+}
 
-	next.type = -1;
+void push(struct parser *p, struct node *n) { p->stack[p->sp++] = *n; }
+
+void proc_parse_param(struct parser *p, struct node *fn) {
+	struct node *param;
+	if (!p->sp) panic("Illegal state, expected a param.\n");
+	if (p->stack[p->sp - 1].type != nk_ident)
+		panic("Expected parameter name.\n");
+
+	arena_alloc((void *)&param, p->a, sizeof(struct node));
+	arena_alloc((void *)&param->node_data, p->a, sizeof(struct param_data));
+
+	p->sp--;
+	if (!p->sp) panic("Illegal state, expected a param.\n");
+	while (1) {
+		if (!p->sp)
+			panic("illegal state, expected a type or asterisk.\n");
+		if (p->stack[p->sp - 1].type != nk_asterisk) break;
+		((struct param_data *)param->node_data)->ptr_level++;
+		p->sp--;
+	}
+	if (p->stack[p->sp - 1].type != nk_char &&
+	    p->stack[p->sp - 1].type != nk_long &&
+	    p->stack[p->sp - 1].type != nk_void)
+		panic("Illegal state, expected a type.\n");
+	((struct param_data *)param->node_data)->kind =
+	    p->stack[p->sp - 1].type;
+	((struct param_data *)param->node_data)->name =
+	    p->in + p->stack[p->sp - 1].loc.off;
+	((struct param_data *)param->node_data)->name_len =
+	    p->stack[p->sp - 1].loc.len;
+	p->sp--;
+	if (!p->sp) panic("Illegal state, expected a comma or paren.\n");
+	if (p->stack[p->sp - 1].type != nk_comma &&
+	    p->stack[p->sp - 1].type != nk_left_paren)
+		panic("Illegal state, expected a comma or paren.\n");
+
+	node_append(fn, param, 0);
+}
+
+void proc_param_list(struct parser *p, struct node *fn) {
+	while (1) {
+		if (!p->sp) panic("Illegal state, expected a param list.\n");
+		if (p->stack[p->sp - 1].type == nk_left_paren) break;
+		proc_parse_param(p, fn);
+		if (p->stack[p->sp - 1].type == nk_comma)
+			p->sp--;
+		else if (p->stack[p->sp - 1].type != nk_left_paren)
+			panic("Unexpected token in param list.\n");
+	}
+
+	p->sp--;
+}
+
+void proc_left_brace_program_level(struct parser *p, struct node *n) {
+	if (!p->sp) panic("Unexpected token 1 '{'\n");
+
+	if (p->stack[p->sp - 1].type == nk_ident) {
+	} else {
+		struct node *fn;
+
+		arena_alloc((void *)&fn, p->a, sizeof(struct node));
+		memset(fn, 0, sizeof(struct node));
+		fn->type = nk_func_def;
+		arena_alloc((void *)&fn->node_data, p->a,
+			    sizeof(struct func_def_data));
+		node_append(p->root, fn, 0);
+
+		if (p->stack[p->sp - 1].type != nk_right_paren)
+			panic("Unexpected token 2 '{'\n");
+		p->sp--;
+		proc_param_list(p, fn);
+
+		if (!p->sp) panic("Illegal state, expected a function name.\n");
+		if (p->stack[p->sp - 1].type != nk_ident)
+			panic("expected function name.\n");
+
+		((struct func_def_data *)fn->node_data)->name =
+		    p->in + p->stack[p->sp - 1].loc.off;
+		((struct func_def_data *)fn->node_data)->name_len =
+		    p->stack[p->sp - 1].loc.len;
+
+		p->sp--;
+		if (!p->sp) panic("functions must be of type void.");
+		if (p->stack[p->sp - 1].type != nk_void)
+			panic("functions must be of type void.");
+		p->sp--;
+		if (p->sp)
+			panic("unexpected token found before function decl\n");
+	}
+
+	(void)n;
+}
+
+void proc_left_brace(struct parser *p, struct node *n) {
+	if (p->current->type == nk_program) proc_left_brace_program_level(p, n);
+}
+
+void proc_right_brace(struct parser *p, struct node *n) {
+	p->sp = 0;
+	(void)n;
+}
+
+void parse(struct parser *p, struct lexer *l, long debug) {
+	long r, cc, cap;
+	struct node next;
+
+	div(&cap, sizeof(p->stack), sizeof(p->stack[0]));
+
 	if (debug) cycle_counter(&cc);
 	while (1) {
 		if (debug == 1 && next.type <= nk_term) {
@@ -782,8 +957,18 @@ void parse(struct parser *p, struct lexer *l, long debug) {
 			write_str(&r, 1, "\n");
 		}
 
-		if (next.type == nk_term) break;
 		lexer_next_token(&next, l);
+		if (next.type == nk_term) break;
+		/*
+		else if (next.type == nk_left_brace)
+			proc_left_brace(p, &next);
+		else if (next.type == nk_right_brace)
+			proc_right_brace(p, &next);
+		else if (p->sp < cap)
+			push(p, &next);
+		else
+			panic("Stack overflow!");
+			*/
 	}
 	if (debug) {
 		long cc1;
@@ -835,6 +1020,14 @@ void main(long argc, char **argv) {
 		exit_group(-1);
 	}
 	close(&r, fd);
+
+	arena_init(&p.a, 16 * 1024 * 1024, 8);
+	arena_alloc((void *)&p.root, p.a, sizeof(struct node));
+	p.in = l.in;
+	p.root->type = nk_program;
+	p.root->first_child = p.root->last_child = 0;
+	p.current = p.root;
+	p.sp = 0;
 
 	l.end = l.in + size;
 	l.off = 0;
