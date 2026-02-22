@@ -32,10 +32,13 @@ __asm__(
     "def"
     "ghi");
 
-/*
-
 void main(long v, char y) {
 	struct x v;
 	v.x = abc;
+	if (x) {
+		x++;
+		if (y) {
+		} else {
+		}
+	}
 }
-*/

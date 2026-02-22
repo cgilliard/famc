@@ -123,6 +123,7 @@ enum node_kind {
 	nk_ident,
 	nk_program,
 	nk_type,
+	nk_function,
 	nk_term
 };
 
@@ -167,6 +168,7 @@ struct parser {
 	struct arena *a;
 	struct node *root;
 	struct node *current;
+	long scope;
 	long sp;
 	struct node stack[4096];
 };
@@ -864,6 +866,12 @@ void node_print_impl(struct node *n, long depth) {
 		write_str(1, ") [");
 		write(&r, 1, td->field_name.ptr, td->field_name.len);
 		write_str(1, "]");
+	} else if (n->kind == nk_function) {
+		long r;
+		struct slice *s = n->node_data;
+		write_str(1, " (function) [");
+		write(&r, 1, s->ptr, s->len);
+		write_str(1, "]");
 	} else if (n->kind == nk_ident) {
 		long r;
 		struct slice *s = n->node_data;
@@ -904,6 +912,38 @@ void proc_enum(struct parser *p, struct lexer *l, struct node *n) {
 	p->current = str_node;
 }
 
+void proc_function(struct parser *p, struct lexer *l, struct node *n) {
+	struct node *function_node;
+	struct slice *s;
+	(void)l;
+	(void)n;
+	p->sp -= 2;
+	if (p->stack[p->sp].kind != nk_right_paren) panic("expected paren");
+
+	arena_alloc((void *)&function_node, p->a, sizeof(struct node));
+	node_init(function_node, nk_function);
+
+	while (--p->sp >= 0) {
+		if (p->stack[p->sp].kind == nk_left_paren) break;
+	}
+
+	if (p->sp == 0) panic("invalid function node");
+	p->sp--;
+	if (p->stack[p->sp].kind != nk_ident) panic("expected ident1");
+
+	arena_alloc((void *)&s, p->a, sizeof(struct node));
+	s->ptr = p->in + p->stack[p->sp].loc.off;
+	s->len = p->stack[p->sp].loc.len;
+
+	if (p->sp == 0) panic("functions must be 'void'");
+	p->sp--;
+	if (p->stack[p->sp].kind != nk_void) panic("functions must be 'void'");
+
+	function_node->node_data = s;
+	node_append(p->root, function_node, 0);
+	p->current = function_node;
+}
+
 void proc_nk_left_brace_root(struct parser *p, struct lexer *l,
 			     struct node *n) {
 	if (p->sp >= 3) {
@@ -912,15 +952,24 @@ void proc_nk_left_brace_root(struct parser *p, struct lexer *l,
 		else if (p->stack[p->sp - 3].kind == nk_enum)
 			proc_enum(p, l, n);
 		else {
+			proc_function(p, l, n);
 		}
 	}
+}
 
-	(void)n;
+void proc_nk_left_brace_function(struct parser *p, struct lexer *l,
+				 struct node *n) {
+	(void)p;
 	(void)l;
+	(void)n;
+	p->scope++;
 }
 
 void proc_nk_left_brace(struct parser *p, struct lexer *l, struct node *n) {
-	if (p->current == p->root) proc_nk_left_brace_root(p, l, n);
+	if (p->current == p->root)
+		proc_nk_left_brace_root(p, l, n);
+	else if (p->current->kind == nk_function)
+		proc_nk_left_brace_function(p, l, n);
 }
 
 void proc_struct_elem(struct parser *p, struct lexer *l, struct node *n) {
@@ -932,7 +981,7 @@ void proc_struct_elem(struct parser *p, struct lexer *l, struct node *n) {
 	if (p->stack[p->sp].kind != nk_semi) panic("expected semi");
 	p->sp--;
 	if (p->sp == 0 || p->stack[p->sp].kind != nk_ident)
-		panic("expected ident");
+		panic("expected ident2");
 	name_ptr = p->in + p->stack[p->sp].loc.off;
 	name_len = p->stack[p->sp].loc.len;
 	p->sp--;
@@ -1008,7 +1057,7 @@ void proc_struct_complete(struct parser *p, struct lexer *l, struct node *n) {
 	}
 	p->sp--;
 	if (p->sp < 1) panic("expected additional struct tokens");
-	if (p->stack[p->sp].kind != nk_ident) panic("expected ident");
+	if (p->stack[p->sp].kind != nk_ident) panic("expected ident3");
 
 	arena_alloc((void *)&s, p->a, sizeof(struct slice));
 	s->ptr = p->in + p->stack[p->sp].loc.off;
@@ -1036,7 +1085,7 @@ void proc_enum_complete(struct parser *p, struct lexer *l, struct node *n) {
 		struct slice *s;
 		struct node *nnode;
 		if (p->stack[p->sp].kind == nk_left_brace) break;
-		if (p->stack[p->sp].kind != nk_ident) panic("expected ident");
+		if (p->stack[p->sp].kind != nk_ident) panic("expected ident4");
 
 		arena_alloc((void *)&s, p->a, sizeof(struct slice));
 		s->ptr = p->in + p->stack[p->sp].loc.off;
@@ -1055,7 +1104,7 @@ void proc_enum_complete(struct parser *p, struct lexer *l, struct node *n) {
 	}
 	p->sp--;
 	if (p->sp < 1) panic("expected additional enum tokens");
-	if (p->stack[p->sp].kind != nk_ident) panic("expected ident");
+	if (p->stack[p->sp].kind != nk_ident) panic("expected ident5");
 
 	arena_alloc((void *)&name, p->a, sizeof(struct slice));
 	name->ptr = p->in + p->stack[p->sp].loc.off;
@@ -1064,14 +1113,24 @@ void proc_enum_complete(struct parser *p, struct lexer *l, struct node *n) {
 	p->current = p->current->parent;
 }
 
-void proc_nk_right_brace(struct parser *p, struct lexer *l, struct node *n) {
+void proc_function_complete(struct parser *p, struct lexer *l, struct node *n) {
 	(void)p;
 	(void)l;
 	(void)n;
 
-	if (p->current->kind == nk_struct) proc_struct_complete(p, l, n);
-	if (p->current->kind == nk_enum) proc_enum_complete(p, l, n);
+	if (!p->scope) {
+		p->current = p->current->parent;
+	} else
+		p->scope--;
+}
 
+void proc_nk_right_brace(struct parser *p, struct lexer *l, struct node *n) {
+	if (p->current->kind == nk_struct) {
+		proc_struct_complete(p, l, n);
+	} else if (p->current->kind == nk_enum) {
+		proc_enum_complete(p, l, n);
+	} else if (p->current->kind == nk_function)
+		proc_function_complete(p, l, n);
 	p->sp = 0;
 }
 
@@ -1117,12 +1176,12 @@ void proc_nk_left_paren_root(struct parser *p, struct lexer *l,
 	(void)l;
 	(void)n;
 	if (p->sp < 2) panic("unexpected token '('");
-	if (p->stack[p->sp - 2].kind != nk_asm) panic("invalid token");
-
-	arena_alloc((void *)&asm_node, p->a, sizeof(struct node));
-	node_init(asm_node, nk_asm);
-	node_append(p->root, asm_node, 0);
-	p->current = asm_node;
+	if (p->stack[p->sp - 2].kind == nk_asm) {
+		arena_alloc((void *)&asm_node, p->a, sizeof(struct node));
+		node_init(asm_node, nk_asm);
+		node_append(p->root, asm_node, 0);
+		p->current = asm_node;
+	}
 }
 
 void proc_nk_left_paren(struct parser *p, struct lexer *l, struct node *n) {
@@ -1176,7 +1235,7 @@ void parse(struct parser *p, struct lexer *l, long debug) {
 		long cc1;
 		cycle_counter(&cc1);
 		cc = cc1 - cc;
-		write_str(1, "lexing_cycles=");
+		write_str(1, "parsing_cycles=");
 		write_num(1, cc);
 		write_str(1, "\n");
 	}
@@ -1238,7 +1297,7 @@ void main(long argc, char **argv) {
 	l.line = 0;
 
 	parse(&p, &l, debug);
-	node_print(p.root);
+	if (debug == 1) node_print(p.root);
 
 	write_str(1, "success!\n");
 
