@@ -466,6 +466,225 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 			next->type = nk_comment;
 			l->off += next->loc.len;
 		}
+	} else if (*in == *"_") {
+		long ch1, ch2, ch3;
+		if (++in == l->end || *in != *"_") goto ident;
+		if (++in == l->end || *in != *"a") goto ident;
+		if (++in == l->end || *in != *"s") goto ident;
+		if (++in == l->end || *in != *"m") goto ident;
+		if (++in == l->end || *in != *"_") goto ident;
+		if (++in == l->end || *in != *"_") goto ident;
+
+		if (++in != l->end) {
+			ch1 = (*in - *"a") & 0xFF;
+			ch2 = (*in - *"A") & 0xFF;
+			ch3 = (*in - *"0") & 0xFF;
+			if (ch1 < 26 || ch2 < 26 || ch3 < 10 || *in == *"_")
+				goto ident;
+		}
+
+		next->loc.len = (long)(in - (l->in + l->off));
+		next->type = nk_asm;
+		l->off += next->loc.len;
+	} else if (*in == *"b") {
+		long ch1, ch2, ch3;
+		if (++in == l->end || *in != *"r") goto ident;
+		if (++in == l->end || *in != *"e") goto ident;
+		if (++in == l->end || *in != *"a") goto ident;
+		if (++in == l->end || *in != *"k") goto ident;
+
+		if (++in != l->end) {
+			ch1 = (*in - *"a") & 0xFF;
+			ch2 = (*in - *"A") & 0xFF;
+			ch3 = (*in - *"0") & 0xFF;
+			if (ch1 < 26 || ch2 < 26 || ch3 < 10 || *in == *"_")
+				goto ident;
+		}
+
+		next->loc.len = (long)(in - (l->in + l->off));
+		next->type = nk_break;
+		l->off += next->loc.len;
+	} else if (*in == *"c") {
+		long ch1, ch2, ch3;
+		if (++in == l->end || *in != *"h") goto ident;
+		if (++in == l->end || *in != *"a") goto ident;
+		if (++in == l->end || *in != *"r") goto ident;
+
+		if (++in != l->end) {
+			ch1 = (*in - *"a") & 0xFF;
+			ch2 = (*in - *"A") & 0xFF;
+			ch3 = (*in - *"0") & 0xFF;
+			if (ch1 < 26 || ch2 < 26 || ch3 < 10 || *in == *"_")
+				goto ident;
+		}
+
+		next->loc.len = (long)(in - (l->in + l->off));
+		next->type = nk_char;
+		l->off += next->loc.len;
+	} else if (*in == *"e") {
+		long ch1, ch2, ch3;
+		if (++in == l->end || *in != *"l") {
+			if (in != l->end && *in == *"n") {
+				if (++in == l->end || *in != *"u") goto ident;
+				if (++in == l->end || *in != *"m") goto ident;
+
+				if (++in != l->end) {
+					ch1 = (*in - *"a") & 0xFF;
+					ch2 = (*in - *"A") & 0xFF;
+					ch3 = (*in - *"0") & 0xFF;
+					if (ch1 < 26 || ch2 < 26 || ch3 < 10 ||
+					    *in == *"_")
+						goto ident;
+				}
+
+				next->loc.len = (long)(in - (l->in + l->off));
+				next->type = nk_enum;
+				l->off += next->loc.len;
+				goto end;
+			}
+
+			goto ident;
+		}
+		if (++in == l->end || *in != *"s") goto ident;
+		if (++in == l->end || *in != *"e") goto ident;
+
+		if (++in != l->end) {
+			ch1 = (*in - *"a") & 0xFF;
+			ch2 = (*in - *"A") & 0xFF;
+			ch3 = (*in - *"0") & 0xFF;
+			if (ch1 < 26 || ch2 < 26 || ch3 < 10 || *in == *"_")
+				goto ident;
+		}
+
+		next->loc.len = (long)(in - (l->in + l->off));
+		next->type = nk_else;
+		l->off += next->loc.len;
+	} else if (*in == *"g") {
+		long ch1, ch2, ch3;
+		if (++in == l->end || *in != *"o") goto ident;
+		if (++in == l->end || *in != *"t") goto ident;
+		if (++in == l->end || *in != *"o") goto ident;
+
+		if (++in != l->end) {
+			ch1 = (*in - *"a") & 0xFF;
+			ch2 = (*in - *"A") & 0xFF;
+			ch3 = (*in - *"0") & 0xFF;
+			if (ch1 < 26 || ch2 < 26 || ch3 < 10 || *in == *"_")
+				goto ident;
+		}
+
+		next->loc.len = (long)(in - (l->in + l->off));
+		next->type = nk_goto;
+		l->off += next->loc.len;
+	} else if (*in == *"i") {
+		long ch1, ch2, ch3;
+		if (++in == l->end || *in != *"f") goto ident;
+
+		if (++in != l->end) {
+			ch1 = (*in - *"a") & 0xFF;
+			ch2 = (*in - *"A") & 0xFF;
+			ch3 = (*in - *"0") & 0xFF;
+			if (ch1 < 26 || ch2 < 26 || ch3 < 10 || *in == *"_")
+				goto ident;
+		}
+
+		next->loc.len = (long)(in - (l->in + l->off));
+		next->type = nk_char;
+		l->off += next->loc.len;
+	} else if (*in == *"l") {
+		long ch1, ch2, ch3;
+		if (++in == l->end || *in != *"o") goto ident;
+		if (++in == l->end || *in != *"n") goto ident;
+		if (++in == l->end || *in != *"g") goto ident;
+
+		if (++in != l->end) {
+			ch1 = (*in - *"a") & 0xFF;
+			ch2 = (*in - *"A") & 0xFF;
+			ch3 = (*in - *"0") & 0xFF;
+			if (ch1 < 26 || ch2 < 26 || ch3 < 10 || *in == *"_")
+				goto ident;
+		}
+
+		next->loc.len = (long)(in - (l->in + l->off));
+		next->type = nk_long;
+		l->off += next->loc.len;
+	} else if (*in == *"s") {
+		long ch1, ch2, ch3;
+		if (++in == l->end || *in != *"i") {
+			if (in != l->end && *in == *"t") {
+				if (++in == l->end || *in != *"r") goto ident;
+				if (++in == l->end || *in != *"u") goto ident;
+				if (++in == l->end || *in != *"c") goto ident;
+				if (++in == l->end || *in != *"t") goto ident;
+
+				if (++in != l->end) {
+					ch1 = (*in - *"a") & 0xFF;
+					ch2 = (*in - *"A") & 0xFF;
+					ch3 = (*in - *"0") & 0xFF;
+					if (ch1 < 26 || ch2 < 26 || ch3 < 10 ||
+					    *in == *"_")
+						goto ident;
+				}
+
+				next->loc.len = (long)(in - (l->in + l->off));
+				next->type = nk_struct;
+				l->off += next->loc.len;
+				goto end;
+			}
+			goto ident;
+		}
+		if (++in == l->end || *in != *"z") goto ident;
+		if (++in == l->end || *in != *"e") goto ident;
+		if (++in == l->end || *in != *"o") goto ident;
+		if (++in == l->end || *in != *"f") goto ident;
+
+		if (++in != l->end) {
+			ch1 = (*in - *"a") & 0xFF;
+			ch2 = (*in - *"A") & 0xFF;
+			ch3 = (*in - *"0") & 0xFF;
+			if (ch1 < 26 || ch2 < 26 || ch3 < 10 || *in == *"_")
+				goto ident;
+		}
+
+		next->loc.len = (long)(in - (l->in + l->off));
+		next->type = nk_sizeof;
+		l->off += next->loc.len;
+
+	} else if (*in == *"v") {
+		long ch1, ch2, ch3;
+		if (++in == l->end || *in != *"o") goto ident;
+		if (++in == l->end || *in != *"i") goto ident;
+		if (++in == l->end || *in != *"d") goto ident;
+
+		if (++in != l->end) {
+			ch1 = (*in - *"a") & 0xFF;
+			ch2 = (*in - *"A") & 0xFF;
+			ch3 = (*in - *"0") & 0xFF;
+			if (ch1 < 26 || ch2 < 26 || ch3 < 10 || *in == *"_")
+				goto ident;
+		}
+
+		next->loc.len = (long)(in - (l->in + l->off));
+		next->type = nk_void;
+		l->off += next->loc.len;
+	} else if (*in == *"w") {
+		long ch1, ch2, ch3;
+		if (++in == l->end || *in != *"h") goto ident;
+		if (++in == l->end || *in != *"i") goto ident;
+		if (++in == l->end || *in != *"l") goto ident;
+		if (++in == l->end || *in != *"e") goto ident;
+
+		if (++in != l->end) {
+			ch1 = (*in - *"a") & 0xFF;
+			ch2 = (*in - *"A") & 0xFF;
+			ch3 = (*in - *"0") & 0xFF;
+			if (ch1 < 26 || ch2 < 26 || ch3 < 10 || *in == *"_")
+				goto ident;
+		}
+
+		next->loc.len = (long)(in - (l->in + l->off));
+		next->type = nk_while;
+		l->off += next->loc.len;
 	} else {
 		long ch1, ch2, ch3;
 
@@ -474,6 +693,7 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 		ch2 = (*in - *"A") & 0xFF;
 
 		if (ch1 < 26 || ch2 < 26 || *in == *"_") {
+		ident:
 			while (++in != l->end) {
 				ch1 = (*in - *"a") & 0xFF;
 				ch2 = (*in - *"A") & 0xFF;
@@ -490,6 +710,10 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 			ch1 = (*in - *"0") & 0xFF;
 
 			if (ch1 < 10) {
+				if (in + 1 != l->end && *(in + 1) == *"x" &&
+				    *in == *"0") {
+					in++;
+				}
 				while (++in != l->end) {
 					ch1 = (*in - *"0") & 0xFF;
 					if (ch1 >= 10) break;
