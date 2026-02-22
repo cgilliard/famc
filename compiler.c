@@ -719,13 +719,31 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 			ch1 = (*in - *"0") & 0xFF;
 
 			if (ch1 < 10) {
+				long is_hex = 0, is_bin = 0;
 				if (in + 1 != l->end && *(in + 1) == *"x" &&
 				    *in == *"0") {
+					is_hex = 1;
+					in++;
+				} else if (in + 1 != l->end &&
+					   *(in + 1) == *"b" && *in == *"0") {
+					is_bin = 1;
 					in++;
 				}
 				while (++in != l->end) {
 					ch1 = (*in - *"0") & 0xFF;
-					if (ch1 >= 10) break;
+					if (is_bin && ch1 > 1)
+						break;
+					else if (ch1 >= 10) {
+						if (is_hex) {
+							ch1 =
+							    (*in - *"a") & 0xFF;
+							ch2 =
+							    (*in - *"A") & 0xFF;
+							if (ch1 > 5 && ch2 > 5)
+								break;
+						} else
+							break;
+					}
 				}
 				next->loc.len = (long)(in - (l->in + l->off));
 				next->type = nk_num_lit;
