@@ -150,13 +150,13 @@ struct parser {
 	struct node stack[4096];
 };
 
-void strlen(long *ret, const char *x) {
-	const char *y = x;
+void strlen(long *ret, char *x) {
+	char *y = x;
 	while (*x) x++;
 	*ret = x - y;
 }
 
-void strcmp(long *ret, const char *x, const char *y) {
+void strcmp(long *ret, char *x, char *y) {
 	while (*x == *y && *x) x++, y++;
 	if (*x > *y)
 		*ret = 1;
