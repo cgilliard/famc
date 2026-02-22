@@ -49,6 +49,15 @@ __asm__(
     "    mov    %rdx, (%rdi)\n"
     "    ret\n");
 
+__asm__(
+    ".section .text\n"
+    "cycle_counter:\n"
+    "    rdtsc\n"
+    "    shlq    $32, %rdx\n"
+    "    orq     %rdx, %rax\n"
+    "    movq    %rax, (%rdi)\n"
+    "    ret\n");
+
 struct lexer {
 	char *in;
 	char *end;
@@ -272,7 +281,7 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 
 	while (in != l->end) {
 		if ((*in - 9) >= 5 && *in != *" ") break;
-		if (*in == '\n') {
+		if (*in == *"\n") {
 			l->col_start = (in - l->in) + 1;
 			l->line++;
 		}
@@ -687,13 +696,13 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 		l->off += next->loc.len;
 	} else {
 		long ch1, ch2, ch3;
+	ident:
 
 		in = l->in + l->off;
 		ch1 = (*in - *"a") & 0xFF;
 		ch2 = (*in - *"A") & 0xFF;
 
 		if (ch1 < 26 || ch2 < 26 || *in == *"_") {
-		ident:
 			while (++in != l->end) {
 				ch1 = (*in - *"a") & 0xFF;
 				ch2 = (*in - *"A") & 0xFF;
@@ -734,11 +743,14 @@ end:;
 
 void parse(struct parser *p, struct lexer *l, long debug) {
 	long r;
+	long cc;
 	struct node next;
+	(void)p;
 
 	next.type = -1;
+	if (debug) cycle_counter(&cc);
 	while (1) {
-		if (next.type <= nk_term) {
+		if (debug == 1 && next.type <= nk_term) {
 			write_str(&r, 1, "token=");
 			write_num(&r, 1, next.type);
 			write_str(&r, 1, ",offset=");
@@ -755,10 +767,14 @@ void parse(struct parser *p, struct lexer *l, long debug) {
 		if (next.type == nk_term) break;
 		lexer_next_token(&next, l);
 	}
-
-	(void)p;
-	(void)l;
-	(void)debug;
+	if (debug) {
+		long cc1;
+		cycle_counter(&cc1);
+		cc = cc1 - cc;
+		write_str(&r, 1, "lexing_cycles=");
+		write_num(&r, 1, cc);
+		write_str(&r, 1, "\n");
+	}
 }
 
 void main(long argc, char **argv) {
@@ -779,7 +795,7 @@ void main(long argc, char **argv) {
 			debug = 1;
 		else {
 			strcmp(&r, argv[1], "--perf");
-			if (r == 2) debug = 2;
+			if (r == 0) debug = 2;
 		}
 	}
 
