@@ -171,6 +171,12 @@ struct parser {
 	struct node stack[4096];
 };
 
+void memmove(void *dest, void *src, long n) {
+	char *d = (void *)((char *)dest + n);
+	char *s = (void *)((char *)src + n);
+	while (n--) d--, s--, *d = *s;
+}
+
 void memset(void *dest, char c, long n) {
 	char *tmp = dest;
 	while (n--) *tmp++ = (char)c;

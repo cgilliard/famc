@@ -9,7 +9,10 @@ struct x {
 	struct v11 p22;
 };
 
-enum yyy { abc, def };
+struct y123 {
+	long p;
+	char y;
+};
 
 /*
 enum y { abc, def, ghi };
