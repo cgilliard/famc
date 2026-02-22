@@ -696,13 +696,13 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 		l->off += next->loc.len;
 	} else {
 		long ch1, ch2, ch3;
-	ident:
 
-		in = l->in + l->off;
 		ch1 = (*in - *"a") & 0xFF;
 		ch2 = (*in - *"A") & 0xFF;
 
 		if (ch1 < 26 || ch2 < 26 || *in == *"_") {
+		ident:
+			in = l->in + l->off;
 			while (++in != l->end) {
 				ch1 = (*in - *"a") & 0xFF;
 				ch2 = (*in - *"A") & 0xFF;
