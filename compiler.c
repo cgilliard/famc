@@ -1131,20 +1131,24 @@ void proc_enum_complete(struct parser *p) {
 
 void proc_nk_left_brace_root(struct parser *p) {
 	if (p->sp >= 3) {
-		if (p->stack[p->sp - 3].kind == nk_struct)
+		if (p->stack[p->sp - 3].kind == nk_struct) {
+			if (p->sp > 3)
+				print_error(&p->stack[p->sp - 4],
+					    "unexpected token");
 			proc_struct(p);
-		else if (p->stack[p->sp - 3].kind == nk_enum)
+		} else if (p->stack[p->sp - 3].kind == nk_enum) {
+			if (p->sp > 3)
+				print_error(&p->stack[p->sp - 4],
+					    "unexpected token");
 			proc_enum(p);
-		else
+		} else
 			proc_function(p);
 	} else {
-		/*
 		if (p->sp > 0)
 			print_error(&p->stack[p->sp - 1],
 				    "unexpected token '{'");
 		else
-			print_error(0, "unexpected token '{'");
-			*/
+			print_error(&p->stack[0], "unexpected token '{'");
 	}
 }
 void proc_nk_left_brace_function(struct parser *p) { p->scope++; }
