@@ -819,6 +819,30 @@ void node_print_impl(struct node *n, long depth) {
 		write_str(1, " (string literal) [");
 		write(&r, 1, s->ptr, s->len);
 		write_str(1, "]");
+	} else if (n->kind == nk_enum) {
+		long r;
+		struct slice *s = n->node_data;
+		write_str(1, " (enum) [");
+		write(&r, 1, s->ptr, s->len);
+		write_str(1, "]");
+	} else if (n->kind == nk_struct) {
+		long r;
+		struct slice *s = n->node_data;
+		write_str(1, " (struct) [");
+		write(&r, 1, s->ptr, s->len);
+		write_str(1, "]");
+	} else if (n->kind == nk_ident) {
+		long r;
+		struct slice *s = n->node_data;
+		write_str(1, " (ident) [");
+		write(&r, 1, s->ptr, s->len);
+		write_str(1, "]");
+	} else if (n->kind == nk_function) {
+		long r;
+		struct slice *s = n->node_data;
+		write_str(1, " (function) [");
+		write(&r, 1, s->ptr, s->len);
+		write_str(1, "]");
 	}
 	write_str(1, "\n");
 
@@ -895,9 +919,119 @@ void proc_nk_asm_complete(struct parser *p) {
 	}
 
 	if (p->sp > 1) print_error(&p->stack[p->sp - 2], "unexpected token");
+	p->current = p->current->parent;
+}
+
+void proc_struct_elem(struct parser *p) { p->sp--; }
+
+void proc_function(struct parser *p) {
+	struct node *function_node;
+
+	p->scope = 0;
+	p->sp -= 2;
+	print_error(&p->stack[p->sp], "Unexpected token. Expected ')'");
+
+	arena_alloc((void *)&function_node, p->a, sizeof(struct node));
+	node_init(function_node, nk_function);
+}
+
+void proc_struct(struct parser *p) {
+	struct node *str_node;
+
+	arena_alloc((void *)&str_node, p->a, sizeof(struct node));
+	node_init(str_node, nk_struct);
+	node_append(p->root, str_node, 0);
+	p->current = str_node;
+}
+
+void proc_enum(struct parser *p) {
+	struct node *str_node;
+
+	arena_alloc((void *)&str_node, p->a, sizeof(struct node));
+	node_init(str_node, nk_enum);
+	node_append(p->root, str_node, 0);
+	p->current = str_node;
+}
+
+void proc_struct_complete(struct parser *p) {
+	struct slice *s;
+
+	p->sp -= 2;
+	while (p->sp >= 0) {
+		if (p->stack[p->sp].kind == nk_left_brace) break;
+		proc_struct_elem(p);
+	}
+	p->sp--;
+	if (p->sp < 1) panic("expected additional struct tokens");
+	if (p->stack[p->sp].kind != nk_ident)
+		print_error(&p->stack[p->sp], "expected identifier");
+
+	arena_alloc((void *)&s, p->a, sizeof(struct slice));
+	s->ptr = p->in + p->stack[p->sp].loc.off;
+	s->len = p->stack[p->sp].loc.len;
+	p->current->node_data = s;
 
 	p->current = p->current->parent;
 }
+
+void proc_enum_complete(struct parser *p) {
+	struct slice *name;
+
+	p->sp -= 2;
+	while (p->sp >= 0) {
+		struct slice *s;
+		struct node *nnode;
+
+		if (p->stack[p->sp].kind != nk_ident)
+			print_error(&p->stack[p->sp], "expected identifier");
+
+		arena_alloc((void *)&s, p->a, sizeof(struct slice));
+		s->ptr = p->in + p->stack[p->sp].loc.off;
+		s->len = p->stack[p->sp].loc.len;
+		arena_alloc((void *)&nnode, p->a, sizeof(struct node));
+		node_init(nnode, nk_ident);
+		nnode->node_data = s;
+		node_append(p->current, nnode, 1);
+
+		p->sp--;
+		if (p->sp < 0) print_error(&p->stack[0], "unexpected token");
+		if (p->stack[p->sp].kind == nk_left_brace) break;
+		if (p->stack[p->sp].kind != nk_comma)
+			print_error(&p->stack[p->sp],
+				    "expected comma or brace");
+		p->sp--;
+	}
+	p->sp--;
+	if (p->sp < 1) print_error(&p->stack[0], "unexpected token");
+	if (p->stack[p->sp].kind != nk_ident)
+		print_error(&p->stack[p->sp], "expected identifier");
+
+	arena_alloc((void *)&name, p->a, sizeof(struct slice));
+	name->ptr = p->in + p->stack[p->sp].loc.off;
+	name->len = p->stack[p->sp].loc.len;
+	p->current->node_data = name;
+	p->current = p->current->parent;
+}
+
+void proc_nk_left_brace_root(struct parser *p) {
+	if (p->sp >= 3) {
+		if (p->stack[p->sp - 3].kind == nk_struct)
+			proc_struct(p);
+		else if (p->stack[p->sp - 3].kind == nk_enum)
+			proc_enum(p);
+
+		/*		proc_function(p);*/
+	} else {
+		/*
+		if (p->sp > 0)
+			print_error(&p->stack[p->sp - 1],
+				    "unexpected token '{'");
+		else
+			print_error(0, "unexpected token '{'");
+			*/
+	}
+}
+void proc_nk_left_brace_function(struct parser *p) { p->scope++; }
 
 void proc_nk_left_paren(struct parser *p) {
 	if (p->current == p->root) proc_nk_left_paren_root(p);
@@ -907,8 +1041,21 @@ void proc_nk_right_paren(struct parser *p) {
 	if (p->current->kind == nk_asm) proc_nk_asm_complete(p);
 }
 
-void proc_nk_left_brace(struct parser *p) { (void)p; }
-void proc_nk_right_brace(struct parser *p) { p->sp = 0; }
+void proc_nk_left_brace(struct parser *p) {
+	if (p->current == p->root)
+		proc_nk_left_brace_root(p);
+	else if (p->current->kind == nk_function)
+		proc_nk_left_brace_function(p);
+}
+
+void proc_nk_right_brace(struct parser *p) {
+	if (p->current->kind == nk_struct)
+		proc_struct_complete(p);
+	else if (p->current->kind == nk_enum)
+		proc_enum_complete(p);
+
+	p->sp = 0;
+}
 
 void proc_nk_semi(struct parser *p) {
 	if (p->current == p->root) p->sp = 0;

@@ -15,7 +15,7 @@ struct y123 {
 	char y;
 };
 
-enum y { abc, def, ghi };
+enum y { abc, def, ghi, x };
 
 struct v {
 	long q;
