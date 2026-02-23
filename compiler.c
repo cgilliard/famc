@@ -1264,43 +1264,42 @@ void proc_nk_left_paren(struct parser *p, struct lexer *l, struct node *n) {
 
 void parse(struct parser *p, struct lexer *l, long debug, long cap) {
 	long cc, r;
-	struct node next;
+	struct node *next = 0;
 
 	if (debug) cycle_counter(&cc);
 	while (1) {
-		if (debug == 1 && next.kind <= nk_term) {
+		if (next && debug == 1 && next->kind <= nk_term) {
 			write_str(1, "token=");
-			write_num(1, next.kind);
+			write_num(1, next->kind);
 			write_str(1, ",offset=");
-			write_num(1, next.loc.off);
+			write_num(1, next->loc.off);
 			write_str(1, ",value='");
-			write(&r, 1, l->in + next.loc.off, next.loc.len);
+			write(&r, 1, l->in + next->loc.off, next->loc.len);
 			write_str(1, "',line=");
-			write_num(1, next.loc.line + 1);
+			write_num(1, next->loc.line + 1);
 			write_str(1, ",col=");
-			write_num(1, next.loc.col + 1);
+			write_num(1, next->loc.col + 1);
 			write_str(1, "\n");
 		}
 
-		lexer_next_token(&next, l);
-		if (next.kind == nk_term)
+		if (p->sp >= cap) panic("Stack overflow!");
+		lexer_next_token(&p->stack[p->sp], l);
+		next = &p->stack[p->sp];
+		p->sp++;
+		if (next->kind == nk_term)
 			break;
 		else {
-			if (next.kind == nk_comment) continue;
-			if (p->sp < cap)
-				p->stack[p->sp++] = next;
-			else
-				panic("Stack overflow!");
-			if (next.kind == nk_right_paren)
-				proc_nk_right_paren(p, l, &next);
-			else if (next.kind == nk_left_paren)
-				proc_nk_left_paren(p, l, &next);
-			else if (next.kind == nk_left_brace)
-				proc_nk_left_brace(p, l, &next);
-			else if (next.kind == nk_right_brace)
-				proc_nk_right_brace(p, l, &next);
-			else if (next.kind == nk_semi)
-				proc_nk_semi(p, l, &next);
+			if (next->kind == nk_comment) continue;
+			if (next->kind == nk_right_paren)
+				proc_nk_right_paren(p, l, next);
+			else if (next->kind == nk_left_paren)
+				proc_nk_left_paren(p, l, next);
+			else if (next->kind == nk_left_brace)
+				proc_nk_left_brace(p, l, next);
+			else if (next->kind == nk_right_brace)
+				proc_nk_right_brace(p, l, next);
+			else if (next->kind == nk_semi)
+				proc_nk_semi(p, l, next);
 		}
 	}
 	if (debug) {
