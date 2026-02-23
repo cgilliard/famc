@@ -1154,6 +1154,7 @@ void proc_nk_left_brace_root(struct parser *p) {
 			print_error(&p->stack[0], "unexpected token '{'");
 	}
 }
+
 void proc_nk_left_brace_function(struct parser *p) { p->scope++; }
 
 void proc_nk_left_paren(struct parser *p) {
@@ -1173,7 +1174,6 @@ void proc_nk_left_brace(struct parser *p) {
 
 void proc_function_complete(struct parser *p) {
 	if (!p->scope) {
-		write_str(2, "function complete\n");
 		p->current = p->current->parent;
 	} else
 		p->scope--;
@@ -1221,7 +1221,6 @@ void parse(struct parser *p, struct lexer *l, long debug) {
 		else {
 			enum node_kind kind = p->stack[p->sp].kind;
 			p->sp++;
-			if (kind == nk_comment) continue;
 			if (kind == nk_right_paren)
 				proc_nk_right_paren(p);
 			else if (kind == nk_left_paren)
