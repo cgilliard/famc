@@ -1011,24 +1011,36 @@ void proc_build_type(struct node **node, struct parser *p) {
 void proc_struct_elem(struct parser *p) {
 	struct node *type_node;
 	p->sp--;
-	write_str(2, "proc struct elem\n");
-	write_num(2, p->stack[p->sp].kind);
-	write_str(2, "\n");
 
 	proc_build_type(&type_node, p);
 	node_append(p->current, type_node, 1);
 }
 
 void proc_function(struct parser *p) {
+	struct slice *s;
 	struct node *function_node;
-
-	p->scope = 0;
-	p->sp -= 2;
-	print_error(&p->stack[p->sp], "Unexpected token. Expected ')'");
 
 	arena_alloc((void *)&function_node, p->a, sizeof(struct node));
 	node_init(function_node, nk_function);
+
+	p->scope = 0;
+	p->sp -= 2;
+
+	if (p->stack[p->sp].kind != nk_right_paren)
+		print_error(&p->stack[p->sp], "Unexpected token. Expected ')'");
+
+	while (p->sp > 0 && p->stack[p->sp].kind != nk_left_paren) p->sp--;
+	p->sp--;
+	if (p->sp <= 0) print_error(&p->stack[0], "unexpected token!");
+	if (p->stack[p->sp].kind != nk_ident)
+		print_error(&p->stack[p->sp], "expected identifier");
+	arena_alloc((void *)&s, p->a, sizeof(struct slice));
+	s->ptr = p->in + p->stack[p->sp].loc.off;
+	s->len = p->stack[p->sp].loc.len;
+
+	function_node->node_data = s;
 	node_append(p->root, function_node, 0);
+	p->current = function_node;
 }
 
 void proc_struct(struct parser *p) {
@@ -1114,10 +1126,8 @@ void proc_nk_left_brace_root(struct parser *p) {
 			proc_struct(p);
 		else if (p->stack[p->sp - 3].kind == nk_enum)
 			proc_enum(p);
-		/*
 		else
 			proc_function(p);
-			*/
 	} else {
 		/*
 		if (p->sp > 0)
@@ -1145,11 +1155,21 @@ void proc_nk_left_brace(struct parser *p) {
 		proc_nk_left_brace_function(p);
 }
 
+void proc_function_complete(struct parser *p) {
+	if (!p->scope) {
+		write_str(2, "function complete\n");
+		p->current = p->current->parent;
+	} else
+		p->scope--;
+}
+
 void proc_nk_right_brace(struct parser *p) {
 	if (p->current->kind == nk_struct)
 		proc_struct_complete(p);
 	else if (p->current->kind == nk_enum)
 		proc_enum_complete(p);
+	else if (p->current->kind == nk_function)
+		proc_function_complete(p);
 
 	p->sp = 0;
 }
