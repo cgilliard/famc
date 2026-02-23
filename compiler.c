@@ -791,17 +791,124 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 end:;
 }
 
-void node_print(struct node *n) { (void)n; }
+void print_error(struct node *n, char *msg) {
+	write_str(2, "Error: ");
+	if (n) {
+		write_num(2, 1 + n->loc.line);
+		write_str(2, ":");
+		write_num(2, 1 + n->loc.col);
+		write_str(2, ": ");
+	}
+	write_str(2, msg);
+	write_str(2, "\n");
+	exit_group(-1);
+}
+
+void node_print_impl(struct node *n, long depth) {
+	long i = 0;
+	struct node *child = n->first_child;
+
+	while (i++ < depth) write_str(1, "   ");
+	write_str(1, "kind=");
+	write_num(1, n->kind);
+	if (n->kind == nk_asm) {
+		write_str(1, " (asm)");
+	} else if (n->kind == nk_str_lit) {
+		long r;
+		struct slice *s = n->node_data;
+		write_str(1, " (string literal) [");
+		write(&r, 1, s->ptr, s->len);
+		write_str(1, "]");
+	}
+	write_str(1, "\n");
+
+	while (child) {
+		node_print_impl(child, depth + 1);
+		child = child->next_sibling;
+	}
+}
+
+void node_print(struct node *n) { node_print_impl(n, 0); }
 
 void node_init(struct node *n, enum node_kind kind) {
 	memset(n, 0, sizeof(struct node));
 	n->kind = kind;
 }
 
-void proc_nk_left_paren(struct parser *p) { (void)p; }
-void proc_nk_right_paren(struct parser *p) { (void)p; }
+void node_append(struct node *parent, struct node *child, long prepend) {
+	child->parent = parent;
+	if (parent->last_child) {
+		if (prepend)
+			parent->first_child->prev_sibling = child;
+		else
+			parent->last_child->next_sibling = child;
+	} else {
+		if (prepend)
+			parent->last_child = child;
+		else
+			parent->first_child = child;
+	}
+	if (prepend) {
+		child->next_sibling = parent->first_child;
+		parent->first_child = child;
+	} else {
+		child->prev_sibling = parent->last_child;
+		parent->last_child = child;
+	}
+}
+
+void proc_nk_left_paren_root(struct parser *p) {
+	struct node *asm_node;
+	if (p->sp < 2) {
+		if (p->sp)
+			print_error(&p->stack[p->sp - 1],
+				    "unexpected token '('");
+		else
+			print_error(0, "unexpected token '('");
+	}
+	if (p->stack[p->sp - 2].kind == nk_asm) {
+		arena_alloc((void *)&asm_node, p->a, sizeof(struct node));
+		node_init(asm_node, nk_asm);
+		node_append(p->root, asm_node, 0);
+		p->current = asm_node;
+	}
+}
+
+void proc_nk_asm_complete(struct parser *p) {
+	p->sp -= 2;
+	while (p->sp > 0 && p->stack[p->sp].kind != nk_left_paren) {
+		struct node *nnode;
+		struct slice *s;
+		if (p->stack[p->sp].kind != nk_str_lit)
+			print_error(&p->stack[p->sp],
+				    "expected string literal");
+
+		arena_alloc((void *)&nnode, p->a, sizeof(struct node));
+		arena_alloc((void *)&s, p->a, sizeof(struct slice));
+		node_init(nnode, nk_str_lit);
+		s->ptr = p->in + p->stack[p->sp].loc.off;
+		s->len = p->stack[p->sp].loc.len;
+		nnode->node_data = s;
+		node_append(p->current, nnode, 1);
+
+		p->sp--;
+	}
+
+	if (p->sp > 1) print_error(&p->stack[p->sp - 2], "unexpected token");
+
+	p->current = p->current->parent;
+}
+
+void proc_nk_left_paren(struct parser *p) {
+	if (p->current == p->root) proc_nk_left_paren_root(p);
+}
+
+void proc_nk_right_paren(struct parser *p) {
+	if (p->current->kind == nk_asm) proc_nk_asm_complete(p);
+}
+
 void proc_nk_left_brace(struct parser *p) { (void)p; }
-void proc_nk_right_brace(struct parser *p) { (void)p; }
+void proc_nk_right_brace(struct parser *p) { p->sp = 0; }
 
 void proc_nk_semi(struct parser *p) {
 	if (p->current == p->root) p->sp = 0;
@@ -856,10 +963,6 @@ void parse(struct parser *p, struct lexer *l, long debug) {
 		write_num(1, cc);
 		write_str(1, "\n");
 	}
-
-	(void)p;
-	(void)l;
-	(void)debug;
 }
 
 void main(long argc, char **argv) {

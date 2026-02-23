@@ -19,18 +19,16 @@ enum y { abc, def, ghi };
 
 struct v {
 	long q;
-}
+};
 
-enum z1234 {
-	x,
-	y,
-	z
-}
+enum z1234 { x, y, z };
 
 __asm__(
     "abc"
     "def"
     "ghi");
+
+__asm__("abc");
 
 void main(struct v argc, char **argv) {
 	struct x v;
