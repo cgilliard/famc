@@ -802,7 +802,10 @@ void proc_nk_left_paren(struct parser *p) { (void)p; }
 void proc_nk_right_paren(struct parser *p) { (void)p; }
 void proc_nk_left_brace(struct parser *p) { (void)p; }
 void proc_nk_right_brace(struct parser *p) { (void)p; }
-void proc_nk_semi(struct parser *p) { (void)p; }
+
+void proc_nk_semi(struct parser *p) {
+	if (p->current == p->root) p->sp = 0;
+}
 
 void parse(struct parser *p, struct lexer *l, long debug) {
 	long cc, r;
