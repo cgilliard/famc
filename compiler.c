@@ -1186,12 +1186,8 @@ void proc_nk_left_brace(struct parser *p) {
 }
 
 void proc_cs_complete(struct parser *p) {
-	write_str(2, "cs complete\n");
 	p->current = p->current->parent;
-	if (p->current->kind == nk_function) {
-		write_str(2, "function complete\n");
-		p->current = p->current->parent;
-	}
+	if (p->current->kind == nk_function) p->current = p->current->parent;
 }
 
 void proc_nk_right_brace(struct parser *p) {
