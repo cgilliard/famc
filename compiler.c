@@ -798,6 +798,12 @@ void node_init(struct node *n, enum node_kind kind) {
 	n->kind = kind;
 }
 
+void proc_nk_left_paren(struct parser *p) { (void)p; }
+void proc_nk_right_paren(struct parser *p) { (void)p; }
+void proc_nk_left_brace(struct parser *p) { (void)p; }
+void proc_nk_right_brace(struct parser *p) { (void)p; }
+void proc_nk_semi(struct parser *p) { (void)p; }
+
 void parse(struct parser *p, struct lexer *l, long debug) {
 	long cc, r;
 
@@ -823,20 +829,19 @@ void parse(struct parser *p, struct lexer *l, long debug) {
 		if (p->stack[p->sp].kind == nk_term)
 			break;
 		else {
+			enum node_kind kind = p->stack[p->sp].kind;
 			p->sp++;
-			/*
-			if (next->kind == nk_comment) continue;
-			if (next->kind == nk_right_paren)
-				proc_nk_right_paren(p, l, next);
-			else if (next->kind == nk_left_paren)
-				proc_nk_left_paren(p, l, next);
-			else if (next->kind == nk_left_brace)
-				proc_nk_left_brace(p, l, next);
-			else if (next->kind == nk_right_brace)
-				proc_nk_right_brace(p, l, next);
-			else if (next->kind == nk_semi)
-				proc_nk_semi(p, l, next);
-				*/
+			if (kind == nk_comment) continue;
+			if (kind == nk_right_paren)
+				proc_nk_right_paren(p);
+			else if (kind == nk_left_paren)
+				proc_nk_left_paren(p);
+			else if (kind == nk_left_brace)
+				proc_nk_left_brace(p);
+			else if (kind == nk_right_brace)
+				proc_nk_right_brace(p);
+			else if (kind == nk_semi)
+				proc_nk_semi(p);
 		}
 	}
 
