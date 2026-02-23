@@ -184,6 +184,12 @@ void memset(void *dest, char c, long n) {
 	while (n--) *tmp++ = (char)c;
 }
 
+void memcpy(void *dest, void *src, long n) {
+	char *d = (void *)dest;
+	char *s = (void *)src;
+	while (n--) *d++ = *s++;
+}
+
 void strlen(long *ret, char *x) {
 	char *y = x;
 	while (*x) x++;
@@ -1299,7 +1305,7 @@ void main(long argc, char **argv) {
 	parse(&p, &l, debug, 4096);
 	if (debug == 1) node_print(p.root);
 
-	write_str(1, "success!\n");
+	if (debug) write_str(1, "success!\n");
 
 	exit_group(0);
 }
