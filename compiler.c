@@ -1029,7 +1029,16 @@ void proc_function(struct parser *p) {
 	if (p->stack[p->sp].kind != nk_right_paren)
 		print_error(&p->stack[p->sp], "Unexpected token. Expected ')'");
 
-	while (p->sp > 0 && p->stack[p->sp].kind != nk_left_paren) p->sp--;
+	p->sp--;
+
+	while (p->sp > 0 && p->stack[p->sp].kind != nk_left_paren) {
+		struct node *nnode;
+
+		proc_build_type(&nnode, p);
+		node_append(function_node, nnode, 1);
+		if (p->stack[p->sp].kind == nk_left_paren) break;
+		p->sp--;
+	}
 	p->sp--;
 	if (p->sp <= 0) print_error(&p->stack[0], "unexpected token!");
 	if (p->stack[p->sp].kind != nk_ident)
