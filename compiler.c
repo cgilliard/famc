@@ -150,7 +150,7 @@ enum type_kind {
 struct type_data {
 	enum type_kind kind;
 	struct slice type_name;
-	struct slice field_name;
+	struct slice var_name;
 	long levels;
 };
 
@@ -858,7 +858,7 @@ void node_print_impl(struct node *n, long depth) {
 			write(&r, 1, "*", 1);
 			i++;
 		}
-		write(&r, 1, td->field_name.ptr, td->field_name.len);
+		write(&r, 1, td->var_name.ptr, td->var_name.len);
 		write_str(1, "]");
 	} else if (n->kind == nk_ident) {
 		long r;
@@ -951,29 +951,6 @@ void proc_nk_asm_complete(struct parser *p) {
 	p->current = p->current->parent;
 }
 
-/*
- * enum type_kind { type_kind_struct, type_kind_enum, type_kind_primitive };
-
-struct type_data {
-	enum type_kind kind;
-	struct slice type_name;
-	struct slice field_name;
-	long levels;
-};
-
-struct node {
-	enum node_kind kind;
-	struct source_location loc;
-	struct node *parent;
-	struct node *first_child;
-	struct node *last_child;
-	struct node *next_sibling;
-	struct node *prev_sibling;
-	void *node_data;
-};
-
-*/
-
 void proc_build_type(struct node **node, struct parser *p) {
 	struct node *type_node;
 	struct type_data *td;
@@ -987,8 +964,8 @@ void proc_build_type(struct node **node, struct parser *p) {
 	if (p->stack[p->sp].kind != nk_ident)
 		print_error(&p->stack[p->sp], "expected identifier");
 
-	td->field_name.ptr = p->in + p->stack[p->sp].loc.off;
-	td->field_name.len = p->stack[p->sp].loc.len;
+	td->var_name.ptr = p->in + p->stack[p->sp].loc.off;
+	td->var_name.len = p->stack[p->sp].loc.len;
 	td->levels = 0;
 
 	while (--p->sp >= 0) {
@@ -1080,7 +1057,7 @@ void proc_struct_complete(struct parser *p) {
 		proc_struct_elem(p);
 
 	p->sp--;
-	if (p->sp < 1) panic("expected additional struct tokens");
+	if (p->sp < 1) print_error(&p->stack[0], "unexpected token");
 	if (p->stack[p->sp].kind != nk_ident)
 		print_error(&p->stack[p->sp], "expected identifier");
 
