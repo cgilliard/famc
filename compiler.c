@@ -11,7 +11,6 @@ __asm__(
     "    mov %rsp, %rcx\n"
     "    and $-16, %rsp\n"
     "    call main\n");
-
 __asm__(
     ".section .text\n"
     "syscall:\n"
@@ -1040,12 +1039,16 @@ void proc_function(struct parser *p) {
 		p->sp--;
 	}
 	p->sp--;
-	if (p->sp <= 0) print_error(&p->stack[0], "unexpected token!");
+	if (p->sp <= 0) print_error(&p->stack[0], "unexpected token");
 	if (p->stack[p->sp].kind != nk_ident)
 		print_error(&p->stack[p->sp], "expected identifier");
 	arena_alloc((void *)&s, p->a, sizeof(struct slice));
 	s->ptr = p->in + p->stack[p->sp].loc.off;
 	s->len = p->stack[p->sp].loc.len;
+
+	p->sp--;
+	if (p->sp != 0 || p->stack[0].kind != nk_void)
+		print_error(&p->stack[0], "unexpected token");
 
 	function_node->node_data = s;
 	node_append(p->root, function_node, 0);
@@ -1241,7 +1244,6 @@ void parse(struct parser *p, struct lexer *l, long debug) {
 		write_str(1, "\n");
 	}
 }
-
 void main(long argc, char **argv) {
 	long fd, size, debug, r;
 	struct lexer l;
