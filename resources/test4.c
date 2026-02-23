@@ -32,7 +32,7 @@ __asm__(
     "def"
     "ghi");
 
-void main(long v, char y) {
+void main(struct v argc, char **argv) {
 	struct x v;
 	v.x = abc;
 	if (x) {
@@ -42,3 +42,5 @@ void main(long v, char y) {
 		}
 	}
 }
+
+void abc(long x) {}

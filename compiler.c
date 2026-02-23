@@ -923,6 +923,8 @@ void proc_function(struct parser *p, struct lexer *l, struct node *n) {
 	struct slice *s;
 	(void)l;
 	(void)n;
+
+	p->scope = 0;
 	p->sp -= 2;
 	if (p->stack[p->sp].kind != nk_right_paren) panic("expected paren");
 
@@ -930,7 +932,73 @@ void proc_function(struct parser *p, struct lexer *l, struct node *n) {
 	node_init(function_node, nk_function);
 
 	while (--p->sp >= 0) {
+		struct node *param;
+
+		arena_alloc((void *)&param, p->a, sizeof(struct node));
+		node_init(param, nk_type);
+
+		arena_alloc(&param->node_data, p->a, sizeof(struct type_data));
+		((struct type_data *)param->node_data)->kind =
+		    p->stack[p->sp].kind;
+		((struct type_data *)param->node_data)->field_name.ptr =
+		    p->in + p->stack[p->sp].loc.off;
+		((struct type_data *)param->node_data)->field_name.len =
+		    p->stack[p->sp].loc.len;
+		((struct type_data *)param->node_data)->levels = 0;
+
+		node_append(function_node, param, 1);
+
+		if (p->stack[p->sp].kind != nk_ident)
+			panic("expected ident (fn)");
+
+		p->sp--;
+
+		while (p->sp > 0) {
+			if (p->stack[p->sp].kind != nk_asterisk) break;
+			((struct type_data *)param->node_data)->levels++;
+			p->sp--;
+		}
+
+		if (p->sp == 0) panic("unexpected state: no stack items");
+
+		if (p->stack[p->sp].kind == nk_ident) {
+			((struct type_data *)param->node_data)->type_name.ptr =
+			    p->in + p->stack[p->sp].loc.off;
+			((struct type_data *)param->node_data)->type_name.len =
+			    p->stack[p->sp].loc.len;
+
+			p->sp--;
+			if (p->sp == 0)
+				panic("unexpected state: no stack items");
+		}
+
+		if (p->stack[p->sp].kind != nk_char &&
+		    p->stack[p->sp].kind != nk_long &&
+		    p->stack[p->sp].kind != nk_void &&
+		    p->stack[p->sp].kind != nk_struct &&
+		    p->stack[p->sp].kind != nk_enum)
+			panic("\nexpected type");
+
+		if (p->stack[p->sp].kind == nk_void &&
+		    !((struct type_data *)param->node_data)->levels)
+			panic("void must be a pointer");
+
+		if (p->stack[p->sp].kind == nk_struct ||
+		    p->stack[p->sp].kind == nk_enum)
+			((struct type_data *)param->node_data)->kind =
+			    p->stack[p->sp].kind;
+		else {
+			((struct type_data *)param->node_data)->type_name.ptr =
+			    p->in + p->stack[p->sp].loc.off;
+			((struct type_data *)param->node_data)->type_name.len =
+			    p->stack[p->sp].loc.len;
+		}
+
+		p->sp--;
+		if (p->sp == 0) panic("unexpected state: no stack items");
+
 		if (p->stack[p->sp].kind == nk_left_paren) break;
+		if (p->stack[p->sp].kind != nk_comma) panic("expected comma");
 	}
 
 	if (p->sp == 0) panic("invalid function node");
