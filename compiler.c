@@ -139,7 +139,13 @@ struct slice {
 	long len;
 };
 
-enum type_kind { type_kind_struct, type_kind_enum, type_kind_primitive };
+enum type_kind {
+	type_kind_struct,
+	type_kind_enum,
+	type_kind_long,
+	type_kind_char,
+	type_kind_void
+};
 
 struct type_data {
 	enum type_kind kind;
@@ -831,6 +837,29 @@ void node_print_impl(struct node *n, long depth) {
 		write_str(1, " (struct) [");
 		write(&r, 1, s->ptr, s->len);
 		write_str(1, "]");
+	} else if (n->kind == nk_type) {
+		long r;
+		struct type_data *td = n->node_data;
+		write_str(1, " (type) [");
+		if (td->kind == type_kind_char)
+			write_str(1, "char ");
+		else if (td->kind == type_kind_long)
+			write_str(1, "long ");
+		else if (td->kind == type_kind_void)
+			write_str(1, "void ");
+		else if (td->kind == type_kind_struct)
+			write_str(1, "struct ");
+		else if (td->kind == type_kind_enum)
+			write_str(1, "enum ");
+		write(&r, 1, td->type_name.ptr, td->type_name.len);
+		if (td->type_name.len) write_str(1, " ");
+		i = 0;
+		while (i < td->levels) {
+			write(&r, 1, "*", 1);
+			i++;
+		}
+		write(&r, 1, td->field_name.ptr, td->field_name.len);
+		write_str(1, "]");
 	} else if (n->kind == nk_ident) {
 		long r;
 		struct slice *s = n->node_data;
@@ -922,7 +951,96 @@ void proc_nk_asm_complete(struct parser *p) {
 	p->current = p->current->parent;
 }
 
-void proc_struct_elem(struct parser *p) { p->sp--; }
+/*
+ * enum type_kind { type_kind_struct, type_kind_enum, type_kind_primitive };
+
+struct type_data {
+	enum type_kind kind;
+	struct slice type_name;
+	struct slice field_name;
+	long levels;
+};
+
+struct node {
+	enum node_kind kind;
+	struct source_location loc;
+	struct node *parent;
+	struct node *first_child;
+	struct node *last_child;
+	struct node *next_sibling;
+	struct node *prev_sibling;
+	void *node_data;
+};
+
+*/
+
+void proc_build_type(struct node **node, struct parser *p) {
+	struct node *type_node;
+	struct type_data *td;
+
+	arena_alloc((void *)&type_node, p->a, sizeof(struct node));
+	node_init(type_node, nk_type);
+	arena_alloc((void *)&td, p->a, sizeof(struct type_data));
+	type_node->node_data = td;
+
+	if (p->sp < 0) print_error(0, "unexpected token");
+	if (p->stack[p->sp].kind != nk_ident)
+		print_error(&p->stack[p->sp], "expected identifier");
+
+	td->field_name.ptr = p->in + p->stack[p->sp].loc.off;
+	td->field_name.len = p->stack[p->sp].loc.len;
+	td->levels = 0;
+
+	while (--p->sp >= 0) {
+		if (p->stack[p->sp].kind != nk_asterisk) break;
+		td->levels++;
+	}
+	if (p->sp < 0) print_error(&p->stack[0], "unexpected token");
+	if (p->stack[p->sp].kind == nk_ident) {
+		td->type_name.ptr = p->in + p->stack[p->sp].loc.off;
+		td->type_name.len = p->stack[p->sp].loc.len;
+
+		p->sp--;
+		if (p->sp < 0) print_error(&p->stack[0], "unexpected token");
+		if (p->stack[p->sp].kind != nk_struct &&
+		    p->stack[p->sp].kind != nk_enum)
+			print_error(&p->stack[p->sp], "unexpected token");
+
+		if (p->stack[p->sp].kind == nk_struct)
+			td->kind = type_kind_struct;
+		else
+			td->kind = type_kind_enum;
+	} else {
+		if (p->stack[p->sp].kind != nk_char &&
+		    p->stack[p->sp].kind != nk_long &&
+		    p->stack[p->sp].kind != nk_void)
+			print_error(&p->stack[p->sp], "unexpected token");
+
+		if (p->stack[p->sp].kind == nk_void && !td->levels)
+			print_error(&p->stack[p->sp],
+				    "void can only be a pointer type");
+
+		if (p->stack[p->sp].kind == nk_char)
+			td->kind = type_kind_char;
+		else if (p->stack[p->sp].kind == nk_long)
+			td->kind = type_kind_long;
+		else if (p->stack[p->sp].kind == nk_void)
+			td->kind = type_kind_void;
+	}
+	p->sp--;
+	*node = type_node;
+}
+
+void proc_struct_elem(struct parser *p) {
+	struct node *type_node;
+	p->sp--;
+	write_str(2, "proc struct elem\n");
+	write_num(2, p->stack[p->sp].kind);
+	write_str(2, "\n");
+
+	proc_build_type(&type_node, p);
+	node_append(p->current, type_node, 1);
+}
 
 void proc_function(struct parser *p) {
 	struct node *function_node;
@@ -933,6 +1051,7 @@ void proc_function(struct parser *p) {
 
 	arena_alloc((void *)&function_node, p->a, sizeof(struct node));
 	node_init(function_node, nk_function);
+	node_append(p->root, function_node, 0);
 }
 
 void proc_struct(struct parser *p) {
@@ -957,10 +1076,9 @@ void proc_struct_complete(struct parser *p) {
 	struct slice *s;
 
 	p->sp -= 2;
-	while (p->sp >= 0) {
-		if (p->stack[p->sp].kind == nk_left_brace) break;
+	while (p->sp >= 0 && p->stack[p->sp].kind != nk_left_brace)
 		proc_struct_elem(p);
-	}
+
 	p->sp--;
 	if (p->sp < 1) panic("expected additional struct tokens");
 	if (p->stack[p->sp].kind != nk_ident)
@@ -1019,8 +1137,10 @@ void proc_nk_left_brace_root(struct parser *p) {
 			proc_struct(p);
 		else if (p->stack[p->sp - 3].kind == nk_enum)
 			proc_enum(p);
-
-		/*		proc_function(p);*/
+		/*
+		else
+			proc_function(p);
+			*/
 	} else {
 		/*
 		if (p->sp > 0)
