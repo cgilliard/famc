@@ -1,6 +1,10 @@
 void proc_struct_complete(struct parser *p) {
-	{ long x = 4; }
-	{ long y = 3; }
+	{
+		long x;
+		long y;
+		x = 4;
+		y = 3;
+	}
 
 	{
 		long z = 2;

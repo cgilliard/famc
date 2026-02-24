@@ -867,6 +867,15 @@ void node_print_impl(struct node *n, long depth) {
 		write_str(1, "]");
 	} else if (n->kind == nk_compound_stmt) {
 		write_str(1, " (compound statement)");
+	} else if (n->kind == nk_break) {
+		write_str(1, " (break)");
+	} else if (n->kind == nk_goto) {
+		long r;
+		struct slice *s = n->node_data;
+		write_str(1, " (goto [");
+		write(&r, 1, s->ptr, s->len);
+		write_str(1, "])");
+
 	} else if (n->kind == nk_function) {
 		long r;
 		struct slice *s = n->node_data;
@@ -883,6 +892,23 @@ void node_print_impl(struct node *n, long depth) {
 }
 
 void node_print(struct node *n) { node_print_impl(n, 0); }
+
+void dump_stack(struct parser *p) {
+	long i, r;
+
+	i = 0;
+	write_str(2, "stack=");
+	while (i < p->sp) {
+		write_str(2, "[");
+		write(&r, 2, p->in + p->stack[i].loc.off, p->stack[i].loc.len);
+		if (i + 1 == p->sp)
+			write_str(2, "]");
+		else
+			write_str(2, "], ");
+		i++;
+	}
+	write_str(2, "\n");
+}
 
 void node_init(struct node *n, enum node_kind kind) {
 	memset(n, 0, sizeof(struct node));
@@ -1138,6 +1164,41 @@ void proc_enum_complete(struct parser *p) {
 	p->current = p->current->parent;
 }
 
+void proc_break(struct parser *p) {
+	struct node *brk;
+
+	arena_alloc((void *)&brk, p->a, sizeof(struct node));
+	node_init(brk, nk_break);
+	node_append(p->current, brk, 0);
+}
+
+void proc_goto(struct parser *p) {
+	struct node *gt;
+	struct slice *s;
+
+	arena_alloc((void *)&s, p->a, sizeof(struct slice));
+	s->ptr = p->in + p->stack[p->sp].loc.off;
+	s->len = p->stack[p->sp].loc.len;
+
+	arena_alloc((void *)&gt, p->a, sizeof(struct node));
+	node_init(gt, nk_goto);
+	gt->node_data = s;
+	node_append(p->current, gt, 0);
+	p->sp--;
+}
+
+void proc_compound_semi(struct parser *p) {
+	/*dump_stack(p);*/
+	p->sp -= 2;
+	if (p->sp >= 0 && p->stack[p->sp].kind == nk_break)
+		proc_break(p);
+	else {
+		if (p->sp > 0 && p->stack[p->sp - 1].kind == nk_goto)
+			proc_goto(p);
+	}
+	p->sp = 0;
+}
+
 void proc_nk_left_brace_root(struct parser *p) {
 	if (p->sp >= 3) {
 		if (p->stack[p->sp - 3].kind == nk_struct) {
@@ -1167,6 +1228,7 @@ void proc_nk_left_brace_function(struct parser *p) {
 	node_init(cs, nk_compound_stmt);
 	node_append(p->current, cs, 0);
 	p->current = cs;
+	p->sp = 0;
 }
 
 void proc_nk_left_paren(struct parser *p) {
@@ -1203,7 +1265,10 @@ void proc_nk_right_brace(struct parser *p) {
 }
 
 void proc_nk_semi(struct parser *p) {
-	if (p->current == p->root) p->sp = 0;
+	if (p->current == p->root)
+		p->sp = 0;
+	else if (p->current->kind == nk_compound_stmt)
+		proc_compound_semi(p);
 }
 
 void parse(struct parser *p, struct lexer *l, long debug) {
