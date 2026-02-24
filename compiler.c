@@ -31,12 +31,10 @@ __asm__(
 void syscall(long *result, long num, long r1, long r2, long r3, long r4,
 	     long r5, long r6);
 
-void exit_group(long status) {
-	long ign;
-	syscall(&ign, 231, status, 0, 0, 0, 0, 0);
-}
+void exit_group(long status) { syscall(&status, 231, status, 0, 0, 0, 0, 0); }
 
 void cmain(long argc, char **argv) {
 	exit_group(argc);
 	(void)argv;
 }
+
