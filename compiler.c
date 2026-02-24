@@ -149,12 +149,6 @@ struct parser {
 void syscall(long *result, long num, long r1, long r2, long r3, long r4,
 	     long r5, long r6);
 
-void memmove(void *dest, void *src, long n) {
-	char *d = (void *)((char *)dest + n);
-	char *s = (void *)((char *)src + n);
-	while (n--) d--, s--, *d = *s;
-}
-
 void cstrlen(long *ret, char *x) {
 	char *y = x;
 	while (*x) x++;
@@ -775,7 +769,10 @@ void node_init(struct parser *p, struct node **n, enum node_kind kind) {
 
 void node_copy(struct parser *p, struct node **dst, struct node *src) {
 	node_init(p, dst, src->kind);
-	(*dst)->loc = src->loc;
+	(*dst)->loc.off = src->loc.off;
+	(*dst)->loc.len = src->loc.len;
+	(*dst)->loc.line = src->loc.line;
+	(*dst)->loc.col = src->loc.col;
 }
 
 void node_append(struct node *parent, struct node *child, long prepend) {
