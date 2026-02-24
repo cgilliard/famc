@@ -1123,7 +1123,7 @@ void proc_fn_params(struct parser *p) {
 }
 
 void proc_statement(struct parser *p) {
-	/*dump_stack(p);*/
+	dump_stack(p);
 	p->sp = 0;
 }
 
@@ -1132,17 +1132,18 @@ void proc_nk_left_paren(struct parser *p) {
 		if (p->stack[p->sp - 2].kind == nk_asm) proc_asm_block(p);
 		if (p->sp >= 3 && p->stack[p->sp - 3].kind == nk_void)
 			proc_function(p);
+		p->sp = 0;
 	}
-	if (p->current->kind != nk_compound_stmt) p->sp = 0;
 }
 
 void proc_nk_right_paren(struct parser *p) {
-	if (p->current->kind == nk_asm)
+	if (p->current->kind == nk_asm) {
 		proc_asm_block_complete(p);
-	else if (p->current->kind == nk_function)
+		p->sp = 0;
+	} else if (p->current->kind == nk_function) {
 		proc_fn_params(p);
-
-	if (p->current->kind != nk_compound_stmt) p->sp = 0;
+		p->sp = 0;
+	}
 }
 
 void proc_nk_left_brace(struct parser *p) {
@@ -1168,8 +1169,10 @@ void proc_nk_right_brace(struct parser *p) {
 }
 
 void proc_nk_semi(struct parser *p) {
-	if (p->current->kind == nk_compound_stmt) proc_statement(p);
-	if (p->current->kind == nk_function) p->current = p->current->parent;
+	if (p->current->kind == nk_compound_stmt)
+		proc_statement(p);
+	else if (p->current->kind == nk_function)
+		p->current = p->current->parent;
 	if (p->current == p->root || p->current->kind == nk_function) p->sp = 0;
 }
 
