@@ -1123,7 +1123,7 @@ void proc_fn_params(struct parser *p) {
 }
 
 void proc_statement(struct parser *p) {
-	dump_stack(p);
+	/*dump_stack(p);*/
 	p->sp = 0;
 }
 
