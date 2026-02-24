@@ -52,7 +52,8 @@ int main(int argc, char **argv) {
 	    "\nvoid cmain(long argc, char **argv) {\n\tlong sum;\n\n\tsum = "
 	    "argc;\n");
 	for (i = 1; i < SIZE; i++)
-		fprintf(fp, "\tfun%d(&sum, sum); sum += argc + %d;\n", i, i);
+		fprintf(fp, "\tfun%d(&sum, sum); sum = sum + argc + %d;\n", i,
+			i);
 	fprintf(fp, "\tsyscall(&sum, 231, sum, 0, 0, 0, 0, 0);\n}\n");
 	fclose(fp);
 	return 0;
