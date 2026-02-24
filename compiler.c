@@ -150,7 +150,8 @@ void syscall(long *result, long num, long r1, long r2, long r3, long r4,
 	     long r5, long r6);
 
 void cstrlen(long *ret, char *x) {
-	char *y = x;
+	char *y;
+	y = x;
 	while (*x) x++;
 	*ret = x - y;
 }
@@ -166,7 +167,8 @@ void cstrcmp(long *ret, char *x, char *y) {
 }
 
 void cmemset(void *dest, char c, long n) {
-	char *tmp = dest;
+	char *tmp;
+	tmp = dest;
 	while (n--) *tmp++ = (char)c;
 }
 
@@ -225,9 +227,13 @@ void write_str(long fd, char *msg) {
 }
 
 void write_num(long fd, long num) {
-	char *buf, *p;
-	long len, written, neg = 0;
+	char *buf;
+	char *p;
+	long len;
+	long written;
+	long neg;
 
+	neg = 0;
 	map((void *)&buf, 21);
 	if (!buf) panic("Could not allocate memory!");
 
@@ -281,7 +287,8 @@ void arena_alloc(void **result, struct arena *a, long size) {
 }
 
 void lexer_next_token(struct node *next, struct lexer *l) {
-	char *in = l->in + l->off;
+	char *in;
+	in = l->in + l->off;
 
 	while (in != l->end) {
 		if ((*in - 9) >= 5 && *in != *" ") break;
@@ -480,7 +487,9 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 			l->off += next->loc.len;
 		}
 	} else if (*in == *"_") {
-		long ch1, ch2, ch3;
+		long ch1;
+		long ch2;
+		long ch3;
 		if (++in == l->end || *in != *"_") goto ident;
 		if (++in == l->end || *in != *"a") goto ident;
 		if (++in == l->end || *in != *"s") goto ident;
@@ -500,7 +509,9 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 		next->kind = nk_asm;
 		l->off += next->loc.len;
 	} else if (*in == *"b") {
-		long ch1, ch2, ch3;
+		long ch1;
+		long ch2;
+		long ch3;
 		if (++in == l->end || *in != *"r") goto ident;
 		if (++in == l->end || *in != *"e") goto ident;
 		if (++in == l->end || *in != *"a") goto ident;
@@ -518,7 +529,9 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 		next->kind = nk_break;
 		l->off += next->loc.len;
 	} else if (*in == *"c") {
-		long ch1, ch2, ch3;
+		long ch1;
+		long ch2;
+		long ch3;
 		if (++in == l->end || *in != *"h") goto ident;
 		if (++in == l->end || *in != *"a") goto ident;
 		if (++in == l->end || *in != *"r") goto ident;
@@ -535,7 +548,9 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 		next->kind = nk_char;
 		l->off += next->loc.len;
 	} else if (*in == *"e") {
-		long ch1, ch2, ch3;
+		long ch1;
+		long ch2;
+		long ch3;
 		if (++in == l->end || *in != *"l") {
 			if (in != l->end && *in == *"n") {
 				if (++in == l->end || *in != *"u") goto ident;
@@ -573,7 +588,10 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 		next->kind = nk_else;
 		l->off += next->loc.len;
 	} else if (*in == *"g") {
-		long ch1, ch2, ch3;
+		long ch1;
+		long ch2;
+		long ch3;
+
 		if (++in == l->end || *in != *"o") goto ident;
 		if (++in == l->end || *in != *"t") goto ident;
 		if (++in == l->end || *in != *"o") goto ident;
@@ -590,7 +608,10 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 		next->kind = nk_goto;
 		l->off += next->loc.len;
 	} else if (*in == *"i") {
-		long ch1, ch2, ch3;
+		long ch1;
+		long ch2;
+		long ch3;
+
 		if (++in == l->end || *in != *"f") goto ident;
 
 		if (++in != l->end) {
@@ -602,10 +623,13 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 		}
 
 		next->loc.len = (long)(in - (l->in + l->off));
-		next->kind = nk_char;
+		next->kind = nk_if;
 		l->off += next->loc.len;
 	} else if (*in == *"l") {
-		long ch1, ch2, ch3;
+		long ch1;
+		long ch2;
+		long ch3;
+
 		if (++in == l->end || *in != *"o") goto ident;
 		if (++in == l->end || *in != *"n") goto ident;
 		if (++in == l->end || *in != *"g") goto ident;
@@ -622,7 +646,10 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 		next->kind = nk_long;
 		l->off += next->loc.len;
 	} else if (*in == *"s") {
-		long ch1, ch2, ch3;
+		long ch1;
+		long ch2;
+		long ch3;
+
 		if (++in == l->end || *in != *"i") {
 			if (in != l->end && *in == *"t") {
 				if (++in == l->end || *in != *"r") goto ident;
@@ -664,7 +691,10 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 		l->off += next->loc.len;
 
 	} else if (*in == *"v") {
-		long ch1, ch2, ch3;
+		long ch1;
+		long ch2;
+		long ch3;
+
 		if (++in == l->end || *in != *"o") goto ident;
 		if (++in == l->end || *in != *"i") goto ident;
 		if (++in == l->end || *in != *"d") goto ident;
@@ -681,7 +711,10 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 		next->kind = nk_void;
 		l->off += next->loc.len;
 	} else if (*in == *"w") {
-		long ch1, ch2, ch3;
+		long ch1;
+		long ch2;
+		long ch3;
+
 		if (++in == l->end || *in != *"h") goto ident;
 		if (++in == l->end || *in != *"i") goto ident;
 		if (++in == l->end || *in != *"l") goto ident;
@@ -699,7 +732,9 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 		next->kind = nk_while;
 		l->off += next->loc.len;
 	} else {
-		long ch1, ch2, ch3;
+		long ch1;
+		long ch2;
+		long ch3;
 
 		ch1 = (*in - *"a") & 0xFF;
 		ch2 = (*in - *"A") & 0xFF;
@@ -723,7 +758,10 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 			ch1 = (*in - *"0") & 0xFF;
 
 			if (ch1 < 10) {
-				long is_hex = 0, is_bin = 0;
+				long is_hex;
+				long is_bin;
+				is_hex = 0;
+				is_bin = 0;
 				if (in + 1 != l->end && *(in + 1) == *"x" &&
 				    *in == *"0") {
 					is_hex = 1;
@@ -810,8 +848,11 @@ void alloc_slice(struct slice **s, struct arena *a, void *ptr, long len) {
 }
 
 void node_print_impl(struct parser *p, struct node *n, long depth) {
-	long i = 0;
-	struct node *child = n->first_child;
+	long i;
+	struct node *child;
+
+	child = n->first_child;
+	i = 0;
 
 	while (i++ < depth) write_str(1, "   ");
 	write_str(1, "kind=");
@@ -830,13 +871,15 @@ void node_print_impl(struct parser *p, struct node *n, long depth) {
 		write_str(1, "]");
 	} else if (n->kind == nk_enum) {
 		long r;
-		struct slice *s = n->node_data;
+		struct slice *s;
+		s = n->node_data;
 		write_str(1, " (enum) [");
 		write(&r, 1, s->ptr, s->len);
 		write_str(1, "]");
 	} else if (n->kind == nk_struct) {
 		long r;
-		struct slice *s = n->node_data;
+		struct slice *s;
+		s = n->node_data;
 		write_str(1, " (struct) [");
 		write(&r, 1, s->ptr, s->len);
 		write_str(1, "]");
@@ -849,7 +892,8 @@ void node_print_impl(struct parser *p, struct node *n, long depth) {
 		write_str(1, " (compound stmt)");
 	} else if (n->kind == nk_type) {
 		long r;
-		struct type_data *td = n->node_data;
+		struct type_data *td;
+		td = n->node_data;
 		write_str(1, " (type) [");
 		if (td->kind == type_kind_char)
 			write_str(1, "char ");
@@ -881,13 +925,16 @@ void node_print_impl(struct parser *p, struct node *n, long depth) {
 void node_print(struct parser *p, struct node *n) { node_print_impl(p, n, 0); }
 
 void dump_stack(struct parser *p) {
-	long i, r;
+	long i;
+	long r;
 
 	i = 0;
 	write_str(2, "stack=");
 	while (i < p->sp) {
 		write_str(2, "[");
 		write(&r, 2, p->in + p->stack[i].loc.off, p->stack[i].loc.len);
+		write_str(2, ",type=");
+		write_num(2, p->stack[i].kind);
 		if (i + 1 == p->sp)
 			write_str(2, "]");
 		else
@@ -911,7 +958,8 @@ void print_error(struct node *n, char *msg) {
 }
 
 void proc_asm_block(struct parser *p) {
-	struct node *asm_node = 0;
+	struct node *asm_node;
+	asm_node = 0;
 	if (p->sp < 2) print_error(&p->stack[0], "unexpected token '('");
 	if (p->stack[p->sp - 2].kind == nk_asm) {
 		node_copy(p, &asm_node, &p->stack[p->sp - 2]);
@@ -923,7 +971,8 @@ void proc_asm_block(struct parser *p) {
 void proc_asm_block_complete(struct parser *p) {
 	p->sp -= 2;
 	while (p->sp > 0 && p->stack[p->sp].kind != nk_left_paren) {
-		struct node *nnode = 0;
+		struct node *nnode;
+		nnode = 0;
 		if (p->stack[p->sp].kind != nk_str_lit)
 			print_error(&p->stack[p->sp],
 				    "expected string literal");
@@ -1122,8 +1171,28 @@ void proc_fn_params(struct parser *p) {
 	}
 }
 
+void proc_expression(struct parser *p) {
+	long i;
+	i = 0;
+	while (i < p->sp) {
+		i++;
+	}
+}
+
 void proc_statement(struct parser *p) {
-	dump_stack(p);
+	/*dump_stack(p);*/
+
+	if (p->stack[0].kind == nk_long || p->stack[0].kind == nk_char ||
+	    p->stack[0].kind == nk_void || p->stack[0].kind == nk_enum ||
+	    p->stack[0].kind == nk_struct) {
+		struct node *nnode;
+		p->sp -= 2;
+		proc_build_type(&nnode, p);
+		node_append(p->current, nnode, 0);
+	} else {
+		proc_expression(p);
+	}
+
 	p->sp = 0;
 }
 
@@ -1199,7 +1268,8 @@ void parse(struct parser *p, struct lexer *l, long debug) {
 		if (p->stack[p->sp].kind == nk_term)
 			break;
 		else {
-			enum node_kind kind = p->stack[p->sp].kind;
+			enum node_kind kind;
+			kind = p->stack[p->sp].kind;
 			p->sp++;
 			if (kind == nk_right_paren)
 				proc_nk_right_paren(p);
@@ -1216,7 +1286,10 @@ void parse(struct parser *p, struct lexer *l, long debug) {
 }
 
 void cmain(long argc, char **argv) {
-	long fd, size, debug, r;
+	long fd;
+	long size;
+	long debug;
+	long r;
 	struct lexer l;
 	struct parser p;
 
