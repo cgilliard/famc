@@ -229,6 +229,7 @@ void write_num(long fd, long num) {
 	long len, written;
 
 	map((void *)&buf, 21);
+	if (!buf) panic("Could not allocate memory!");
 
 	p = buf + 20;
 	*p = *"\0";
@@ -843,6 +844,8 @@ void node_print_impl(struct parser *p, struct node *n, long depth) {
 		write_str(1, " (function) [");
 		write(&r, 1, p->in + n->loc.off, n->loc.len);
 		write_str(1, "]");
+	} else if (n->kind == nk_compound_stmt) {
+		write_str(1, " (compound stmt)");
 	} else if (n->kind == nk_type) {
 		long r;
 		struct type_data *td = n->node_data;
@@ -990,7 +993,6 @@ void proc_build_type(struct node **node, struct parser *p) {
 		else if (p->stack[p->sp].kind == nk_void)
 			td->kind = type_kind_void;
 	}
-	p->sp--;
 	*node = type_node;
 }
 
@@ -999,6 +1001,7 @@ void proc_struct_elem(struct parser *p) {
 	p->sp--;
 
 	proc_build_type(&type_node, p);
+	p->sp--;
 	node_append(p->current, type_node, 1);
 }
 
@@ -1084,7 +1087,7 @@ void proc_nk_left_brace_root(struct parser *p) {
 }
 
 void proc_function(struct parser *p) {
-	struct node *nnode /*, *compound*/;
+	struct node *nnode;
 	node_init(p, &nnode, nk_function);
 	copy_location(&nnode->loc, &p->stack[p->sp - 2].loc);
 	node_append(p->root, nnode, 0);
@@ -1107,6 +1110,19 @@ void proc_compound_stmt_start(struct parser *p) {
 	p->sp = 0;
 }
 
+void proc_fn_params(struct parser *p) {
+	p->sp -= 2;
+
+	while (p->sp > 0 && p->stack[p->sp].kind != nk_left_paren) {
+		struct node *nnode;
+		proc_build_type(&nnode, p);
+		node_append(p->current, nnode, 1);
+
+		if (p->sp <= 0) break;
+		p->sp -= 2;
+	}
+}
+
 void proc_nk_left_paren(struct parser *p) {
 	if (p->current == p->root && p->sp >= 2) {
 		if (p->stack[p->sp - 2].kind == nk_asm) proc_asm_block(p);
@@ -1117,7 +1133,11 @@ void proc_nk_left_paren(struct parser *p) {
 }
 
 void proc_nk_right_paren(struct parser *p) {
-	if (p->current->kind == nk_asm) proc_asm_block_complete(p);
+	if (p->current->kind == nk_asm)
+		proc_asm_block_complete(p);
+	else if (p->current->kind == nk_function)
+		proc_fn_params(p);
+
 	p->sp = 0;
 }
 
@@ -1144,7 +1164,8 @@ void proc_nk_right_brace(struct parser *p) {
 }
 
 void proc_nk_semi(struct parser *p) {
-	if (p->current == p->root) p->sp = 0;
+	if (p->current->kind == nk_function) p->current = p->current->parent;
+	if (p->current == p->root || p->current->kind == nk_function) p->sp = 0;
 }
 
 void parse(struct parser *p, struct lexer *l, long debug) {
