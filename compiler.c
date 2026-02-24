@@ -226,7 +226,7 @@ void write_str(long fd, char *msg) {
 
 void write_num(long fd, long num) {
 	char *buf, *p;
-	long len, written;
+	long len, written, neg = 0;
 
 	map((void *)&buf, 21);
 	if (!buf) panic("Could not allocate memory!");
@@ -236,7 +236,7 @@ void write_num(long fd, long num) {
 
 	if (num < 0) {
 		num = -num;
-		*--p = *"-";
+		neg = 1;
 	} else if (num == 0)
 		*--p = *"0";
 
@@ -246,6 +246,7 @@ void write_num(long fd, long num) {
 		*--p = *"0" + tmp;
 		num = num / 10;
 	}
+	if (neg) *--p = *"-";
 
 	len = (buf + 20) - p;
 	write(&written, fd, p, len);
