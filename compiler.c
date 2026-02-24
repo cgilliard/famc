@@ -1076,13 +1076,11 @@ void proc_nk_left_brace_root(struct parser *p) {
 			proc_enum(p, &p->stack[p->sp - 3]);
 		}
 	} else {
-		/*
 		if (p->sp > 0)
 			print_error(&p->stack[p->sp - 1],
 				    "unexpected token '{'");
 		else
 			print_error(&p->stack[0], "unexpected token '{'");
-			*/
 	}
 }
 
