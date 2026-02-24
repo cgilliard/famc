@@ -6,7 +6,7 @@ BINARY="${BIN_DIR}/famc";
 CC="${CC:-clang}"
 CFLAGS="${CFLAGS:- -O3}"
 CSTRICT="-nostdlib \
-	-fvisibility=hidden \
+	-fno-builtin \
 	-std=c89 \
 	-Wall \
 	-Wextra \
