@@ -761,6 +761,13 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 end:;
 }
 
+void copy_location(struct source_location *dst, struct source_location *src) {
+	dst->off = src->off;
+	dst->len = src->len;
+	dst->line = src->line;
+	dst->col = src->col;
+}
+
 void node_init(struct parser *p, struct node **n, enum node_kind kind) {
 	arena_alloc((void *)n, p->a, sizeof(struct node));
 	cmemset(*n, 0, sizeof(struct node));
@@ -769,10 +776,7 @@ void node_init(struct parser *p, struct node **n, enum node_kind kind) {
 
 void node_copy(struct parser *p, struct node **dst, struct node *src) {
 	node_init(p, dst, src->kind);
-	(*dst)->loc.off = src->loc.off;
-	(*dst)->loc.len = src->loc.len;
-	(*dst)->loc.line = src->loc.line;
-	(*dst)->loc.col = src->loc.col;
+	copy_location(&(*dst)->loc, &src->loc);
 }
 
 void node_append(struct node *parent, struct node *child, long prepend) {
@@ -833,6 +837,11 @@ void node_print_impl(struct parser *p, struct node *n, long depth) {
 		struct slice *s = n->node_data;
 		write_str(1, " (struct) [");
 		write(&r, 1, s->ptr, s->len);
+		write_str(1, "]");
+	} else if (n->kind == nk_function) {
+		long r;
+		write_str(1, " (function) [");
+		write(&r, 1, p->in + n->loc.off, n->loc.len);
 		write_str(1, "]");
 	} else if (n->kind == nk_type) {
 		long r;
@@ -1074,11 +1083,37 @@ void proc_nk_left_brace_root(struct parser *p) {
 	}
 }
 
+void proc_function(struct parser *p) {
+	struct node *nnode /*, *compound*/;
+	node_init(p, &nnode, nk_function);
+	copy_location(&nnode->loc, &p->stack[p->sp - 2].loc);
+	node_append(p->root, nnode, 0);
+	p->current = nnode;
+}
+
+void proc_compound_stmt_end(struct parser *p) {
+	p->current = p->current->parent;
+	if (p->current->kind == nk_function) {
+		p->current = p->current->parent;
+	}
+}
+
+void proc_compound_stmt_start(struct parser *p) {
+	struct node *cs;
+	node_init(p, &cs, nk_compound_stmt);
+	copy_location(&cs->loc, &p->stack[p->sp - 1].loc);
+	node_append(p->current, cs, 0);
+	p->current = cs;
+	p->sp = 0;
+}
+
 void proc_nk_left_paren(struct parser *p) {
-	if (p->current == p->root) {
-		if (p->sp >= 2) proc_asm_block(p);
-	} else
-		p->sp = 0;
+	if (p->current == p->root && p->sp >= 2) {
+		if (p->stack[p->sp - 2].kind == nk_asm) proc_asm_block(p);
+		if (p->sp >= 3 && p->stack[p->sp - 3].kind == nk_void)
+			proc_function(p);
+	}
+	p->sp = 0;
 }
 
 void proc_nk_right_paren(struct parser *p) {
@@ -1089,6 +1124,9 @@ void proc_nk_right_paren(struct parser *p) {
 void proc_nk_left_brace(struct parser *p) {
 	if (p->current == p->root)
 		proc_nk_left_brace_root(p);
+	else if (p->current->kind == nk_function ||
+		 p->current->kind == nk_compound_stmt)
+		proc_compound_stmt_start(p);
 	else
 		p->sp = 0;
 }
@@ -1098,6 +1136,9 @@ void proc_nk_right_brace(struct parser *p) {
 		proc_struct_complete(p);
 	else if (p->current->kind == nk_enum)
 		proc_enum_complete(p);
+	else if (p->current->kind == nk_function ||
+		 p->current->kind == nk_compound_stmt)
+		proc_compound_stmt_end(p);
 
 	p->sp = 0;
 }
