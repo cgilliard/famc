@@ -10,7 +10,7 @@ __asm__(
     "    lea (%rsi, %rcx), %rdx\n"
     "    mov %rsp, %rcx\n"
     "    and $-16, %rsp\n"
-    "    call main\n");
+    "    call cmain\n");
 __asm__(
     ".section .text\n"
     "syscall:\n"
@@ -28,12 +28,15 @@ __asm__(
     "pop     %rbp\n"
     "ret\n");
 
+void syscall(long *result, long num, long r1, long r2, long r3, long r4,
+	     long r5, long r6);
+
 void exit_group(long status) {
 	long ign;
 	syscall(&ign, 231, status, 0, 0, 0, 0, 0);
 }
 
-void main(long argc, char **argv) {
+void cmain(long argc, char **argv) {
 	exit_group(argc);
 	(void)argv;
 }
