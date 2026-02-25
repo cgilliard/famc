@@ -1130,7 +1130,7 @@ void proc_asm_complete(struct parser *p) {
 	p->current = p->current->parent;
 }
 
-void proc_compound_stmt_end(struct parser *p) {
+void proc_compound_stmt_complete(struct parser *p) {
 	p->current = p->current->parent;
 	if (p->current->kind == nk_function) {
 		p->current = p->current->parent;
@@ -1168,9 +1168,11 @@ void proc_func_decl(struct parser *p) {
 
 void proc_fn_params(struct parser *p) {
 	p->sp -= 2;
-
-	while (p->sp > 0 && p->stack[p->sp].kind != nk_left_paren) {
+	while (p->sp >= 0) {
 		struct node *nnode;
+
+		if (p->stack[p->sp].kind == nk_left_paren) break;
+
 		proc_build_type(&nnode, p);
 		node_append(p->current, nnode, 1);
 
@@ -1218,7 +1220,7 @@ void proc_right_brace(struct parser *p) {
 		proc_enum_complete(p);
 	else if (p->current->kind == nk_function ||
 		 p->current->kind == nk_compound_stmt)
-		proc_compound_stmt_end(p);
+		proc_compound_stmt_complete(p);
 	p->sp = 0;
 }
 void proc_semi(struct parser *p) {
