@@ -1089,6 +1089,8 @@ void proc_build_type(struct node **node, struct parser *p) {
 	*node = type_node;
 }
 
+void proc_stmt(struct parser *p, long offset);
+
 void proc_if(struct parser *p, long is_block) {
 	struct node *ifn;
 
@@ -1262,8 +1264,8 @@ void proc_fn_params(struct parser *p) {
 	if (!empty && p->sp > -2) print_error(&p->stack[0], "unexpected token");
 }
 
-void proc_stmt(struct parser *p) {
-	enum node_kind kind = p->stack[0].kind;
+void proc_stmt(struct parser *p, long offset) {
+	enum node_kind kind = p->stack[offset].kind;
 
 	if (kind == nk_if) {
 		write_str(2, "stmt if\n");
@@ -1347,7 +1349,7 @@ void proc_right_brace(struct parser *p) {
 
 void proc_semi(struct parser *p) {
 	if (p->current->kind == nk_compound_stmt) {
-		proc_stmt(p);
+		proc_stmt(p, 0);
 		p->sp = 0;
 	} else if (p->current->kind == nk_function) {
 		if (!p->current->node_data)
