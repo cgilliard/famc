@@ -1224,11 +1224,8 @@ void proc_right_brace(struct parser *p) {
 	p->sp = 0;
 }
 void proc_semi(struct parser *p) {
-	if (p->current == p->root) p->sp = 0;
-	if (p->current->kind == nk_function) {
-		p->current = p->current->parent;
-		p->sp = 0;
-	}
+	if (p->current->kind == nk_function) p->current = p->current->parent;
+	p->sp = 0;
 }
 
 void parse(struct parser *p, struct lexer *l, long debug) {
