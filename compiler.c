@@ -1089,18 +1089,15 @@ void proc_build_type(struct node **node, struct parser *p) {
 	*node = type_node;
 }
 
-void proc_if(struct parser *p) {
-	/*
+void proc_if(struct parser *p, long is_block) {
 	struct node *ifn;
+
 	write_str(2, "proc_if\n");
 	dump_stack(p);
-
 	node_init(p, &ifn, nk_if);
 	copy_location(&ifn->loc, &p->stack[0].loc);
 	node_append(p->current, ifn, 0);
-	p->current = ifn;
-	*/
-	(void)p;
+	if (is_block) p->current = ifn;
 }
 void proc_break(struct parser *p) {
 	/*
@@ -1206,12 +1203,13 @@ void proc_asm_complete(struct parser *p) {
 
 void proc_compound_stmt_complete(struct parser *p) {
 	p->current = p->current->parent;
-	if (p->current->kind == nk_function) p->current = p->current->parent;
+	if (p->current->kind == nk_function || p->current->kind == nk_if)
+		p->current = p->current->parent;
 }
 
 void proc_compound_stmt(struct parser *p) {
 	struct node *cs;
-	if (p->stack[0].kind == nk_if) proc_if(p);
+	if (p->stack[0].kind == nk_if) proc_if(p, 1);
 
 	node_init(p, &cs, nk_compound_stmt);
 	copy_location(&cs->loc, &p->stack[p->sp - 1].loc);
@@ -1267,9 +1265,10 @@ void proc_fn_params(struct parser *p) {
 void proc_stmt(struct parser *p) {
 	enum node_kind kind = p->stack[0].kind;
 
-	if (kind == nk_if)
-		proc_if(p);
-	else if (kind == nk_break)
+	if (kind == nk_if) {
+		write_str(2, "stmt if\n");
+		proc_if(p, 0);
+	} else if (kind == nk_break)
 		proc_break(p);
 	else if (kind == nk_else)
 		proc_else(p);
