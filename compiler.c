@@ -969,7 +969,8 @@ void node_print_impl(struct parser *p, struct node *n, long depth) {
 		write_str(1, " (unary) [");
 		write_num(1, *op);
 		write_str(1, "]");
-
+	} else if (n->kind == nk_if) {
+		write_str(1, " (if)");
 	} else if (n->kind == nk_plus) {
 		write_str(1, " (add)");
 	} else if (n->kind == nk_asterisk) {
@@ -1091,15 +1092,16 @@ void proc_build_type(struct node **node, struct parser *p) {
 
 void proc_stmt(struct parser *p, long offset);
 
-void proc_if(struct parser *p, long is_block) {
+void proc_if(struct parser *p) {
+	/*
 	struct node *ifn;
 
-	write_str(2, "proc_if\n");
-	dump_stack(p);
 	node_init(p, &ifn, nk_if);
 	copy_location(&ifn->loc, &p->stack[0].loc);
 	node_append(p->current, ifn, 0);
 	if (is_block) p->current = ifn;
+	*/
+	(void)p;
 }
 void proc_break(struct parser *p) {
 	/*
@@ -1118,10 +1120,8 @@ void proc_else(struct parser *p) {
 }
 
 void proc_goto(struct parser *p) {
-	/*
 	write_str(2, "proc goto\n");
 	dump_stack(p);
-	*/
 	(void)p;
 }
 
@@ -1211,7 +1211,6 @@ void proc_compound_stmt_complete(struct parser *p) {
 
 void proc_compound_stmt(struct parser *p) {
 	struct node *cs;
-	if (p->stack[0].kind == nk_if) proc_if(p, 1);
 
 	node_init(p, &cs, nk_compound_stmt);
 	copy_location(&cs->loc, &p->stack[p->sp - 1].loc);
@@ -1267,19 +1266,8 @@ void proc_fn_params(struct parser *p) {
 void proc_stmt(struct parser *p, long offset) {
 	enum node_kind kind = p->stack[offset].kind;
 
-	if (kind == nk_if) {
-		write_str(2, "stmt if\n");
-		proc_if(p, 0);
-	} else if (kind == nk_break)
-		proc_break(p);
-	else if (kind == nk_else)
-		proc_else(p);
-	else if (kind == nk_goto)
-		proc_goto(p);
-	else if (kind == nk_while)
-		proc_while(p);
-	else if (kind == nk_long || kind == nk_char || kind == nk_void ||
-		 kind == nk_struct || kind == nk_enum)
+	if (kind == nk_long || kind == nk_char || kind == nk_void ||
+	    kind == nk_struct || kind == nk_enum)
 		proc_type_decl(p);
 	else if (kind == nk_ident || kind == nk_num_lit || kind == nk_str_lit ||
 		 kind == nk_asterisk || kind == nk_left_paren ||
@@ -1288,12 +1276,14 @@ void proc_stmt(struct parser *p, long offset) {
 		 kind == nk_tilde || kind == nk_sizeof)
 		proc_expression(p);
 	else {
+		/*
 		write_num(2, 1 + p->stack[p->sp - 1].loc.line);
 		write_str(2, ":");
 		write_num(2, 1 + p->stack[p->sp - 1].loc.col);
 		write_str(2, "\n");
 		dump_stack(p);
-		print_error(&p->stack[0], "unexpected token");
+		*/
+		/*print_error(&p->stack[0], "unexpected token");*/
 	}
 }
 
