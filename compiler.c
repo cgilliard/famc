@@ -115,6 +115,9 @@ enum node_kind {
 	nk_plus,
 	nk_equal,
 	nk_bang,
+	nk_mod,
+	nk_tilde,
+	nk_div,
 	nk_gt,
 	nk_lt,
 	nk_gte,
@@ -362,6 +365,14 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 		next->loc.len = 1;
 		next->kind = nk_asterisk;
 		l->off++;
+	} else if (*in == *"%") {
+		next->loc.len = 1;
+		next->kind = nk_mod;
+		l->off++;
+	} else if (*in == *"~") {
+		next->loc.len = 1;
+		next->kind = nk_tilde;
+		l->off++;
 	} else if (*in == *"|") {
 		if (++in != l->end && *in == *"|") {
 			next->loc.len = 2;
@@ -510,22 +521,27 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 			l->off += next->loc.len;
 		}
 	} else if (*in == *"/") {
-		if (++in == l->end || *in != *"*") goto error;
-		while (++in != l->end) {
-			if (*in == *"/" && *(in - 1) == *"*") break;
-			if (*in == *"\n") {
-				l->col_start = (in - l->in) + 1;
-				l->line++;
-			}
-		}
-		if (in == l->end) {
-			next->loc.len = in - (l->in + l->off);
-			next->kind = nk_error;
-			l->off += next->loc.len;
+		if (++in == l->end || *in != *"*") {
+			next->loc.len = 1;
+			next->kind = nk_div;
+			l->off++;
 		} else {
-			next->loc.len = in - (l->in + l->off) + 1;
-			next->kind = nk_comment;
-			l->off += next->loc.len;
+			while (++in != l->end) {
+				if (*in == *"/" && *(in - 1) == *"*") break;
+				if (*in == *"\n") {
+					l->col_start = (in - l->in) + 1;
+					l->line++;
+				}
+			}
+			if (in == l->end) {
+				next->loc.len = in - (l->in + l->off);
+				next->kind = nk_error;
+				l->off += next->loc.len;
+			} else {
+				next->loc.len = in - (l->in + l->off) + 1;
+				next->kind = nk_comment;
+				l->off += next->loc.len;
+			}
 		}
 	} else if (*in == *"_") {
 		long ch1;
@@ -834,7 +850,6 @@ void lexer_next_token(struct node *next, struct lexer *l) {
 				goto end;
 			}
 		}
-	error:
 		next->loc.len = 1;
 		next->kind = nk_error;
 		l->off++;
@@ -1027,7 +1042,7 @@ void proc_build_type(struct node **node, struct parser *p) {
 	arena_alloc((void *)&td, p->a, sizeof(struct type_data));
 	type_node->node_data = td;
 
-	if (p->sp < 0) print_error(0, "unexpected token");
+	if (p->sp < 0) print_error(&p->stack[0], "unexpected token");
 	if (p->stack[p->sp].kind != nk_ident)
 		print_error(&p->stack[p->sp], "expected identifier");
 
@@ -1081,6 +1096,8 @@ void proc_struct_complete(struct parser *p) {
 		p->sp--;
 		proc_build_type(&type_node, p);
 		p->sp--;
+		if (p->sp >= 0 && p->stack[p->sp].kind != nk_semi)
+			print_error(&p->stack[p->sp], "expected ';'");
 		node_append(p->current, type_node, 1);
 	}
 	p->current = p->current->parent;
@@ -1178,6 +1195,7 @@ void proc_func_decl(struct parser *p) {
 
 void proc_fn_params(struct parser *p) {
 	char empty = 1;
+	p->current->node_data = p;
 	p->sp -= 2;
 	while (p->sp >= 0) {
 		struct node *nnode;
@@ -1240,14 +1258,24 @@ void proc_right_brace(struct parser *p) {
 }
 
 void proc_semi(struct parser *p) {
-	if (p->current->kind == nk_function) p->current = p->current->parent;
-	if (p->current == p->root) p->sp = 0;
+	if (p->current->kind == nk_function) {
+		if (!p->current->node_data)
+			print_error(&p->stack[p->sp - 1],
+				    "expected ')' before ';'");
+		p->current = p->current->parent;
+	}
+	if (p->current == p->root) {
+		if (p->sp > 1) print_error(&p->stack[0], "invalid statement");
+		p->sp = 0;
+	}
 }
 
 void parse(struct parser *p, struct lexer *l, long debug) {
 	while (1) {
 		if (p->sp >= p->capacity) panic("Stack overflow!");
 		lexer_next_token(&p->stack[p->sp], l);
+		if (p->stack[p->sp].kind == nk_error)
+			print_error(&p->stack[p->sp], "unrecognized token");
 		if (debug && p->stack[p->sp].kind <= nk_term) {
 			long r;
 			write_str(1, "token=");
