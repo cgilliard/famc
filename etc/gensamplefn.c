@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#define SIZE 10000
+#define SIZE 2
 
 int main(int argc, char **argv) {
 	int i;
