@@ -1089,6 +1089,61 @@ void proc_build_type(struct node **node, struct parser *p) {
 	*node = type_node;
 }
 
+void proc_if(struct parser *p) {
+	/*
+	struct node *ifn;
+	write_str(2, "proc_if\n");
+	dump_stack(p);
+
+	node_init(p, &ifn, nk_if);
+	copy_location(&ifn->loc, &p->stack[0].loc);
+	node_append(p->current, ifn, 0);
+	p->current = ifn;
+	*/
+	(void)p;
+}
+void proc_break(struct parser *p) {
+	/*
+	write_str(2, "proc_break\n");
+	dump_stack(p);
+	*/
+	(void)p;
+}
+
+void proc_else(struct parser *p) {
+	/*
+	write_str(2, "proc else\n");
+	dump_stack(p);
+	*/
+	(void)p;
+}
+
+void proc_goto(struct parser *p) {
+	/*
+	write_str(2, "proc goto\n");
+	dump_stack(p);
+	*/
+	(void)p;
+}
+
+void proc_while(struct parser *p) {
+	/*
+	write_str(2, "proc while\n");
+	dump_stack(p);
+	*/
+	(void)p;
+}
+
+void proc_type_decl(struct parser *p) {
+	/*
+	write_str(2, "proc type decl\n");
+	dump_stack(p);
+	*/
+	(void)p;
+}
+
+void proc_expression(struct parser *p) { (void)p; }
+
 void proc_struct_complete(struct parser *p) {
 	p->sp -= 2;
 	while (p->sp >= 0) {
@@ -1156,6 +1211,8 @@ void proc_compound_stmt_complete(struct parser *p) {
 
 void proc_compound_stmt(struct parser *p) {
 	struct node *cs;
+	if (p->stack[0].kind == nk_if) proc_if(p);
+
 	node_init(p, &cs, nk_compound_stmt);
 	copy_location(&cs->loc, &p->stack[p->sp - 1].loc);
 	node_append(p->current, cs, 0);
@@ -1205,6 +1262,38 @@ void proc_fn_params(struct parser *p) {
 		empty = 0;
 	}
 	if (!empty && p->sp > -2) print_error(&p->stack[0], "unexpected token");
+}
+
+void proc_stmt(struct parser *p) {
+	enum node_kind kind = p->stack[0].kind;
+
+	if (kind == nk_if)
+		proc_if(p);
+	else if (kind == nk_break)
+		proc_break(p);
+	else if (kind == nk_else)
+		proc_else(p);
+	else if (kind == nk_goto)
+		proc_goto(p);
+	else if (kind == nk_while)
+		proc_while(p);
+	else if (kind == nk_long || kind == nk_char || kind == nk_void ||
+		 kind == nk_struct || kind == nk_enum)
+		proc_type_decl(p);
+	else if (kind == nk_ident || kind == nk_num_lit || kind == nk_str_lit ||
+		 kind == nk_asterisk || kind == nk_left_paren ||
+		 kind == nk_double_plus || kind == nk_double_hyphen ||
+		 kind == nk_ampersand || kind == nk_hyphen || kind == nk_bang ||
+		 kind == nk_tilde || kind == nk_sizeof)
+		proc_expression(p);
+	else {
+		write_num(2, 1 + p->stack[p->sp - 1].loc.line);
+		write_str(2, ":");
+		write_num(2, 1 + p->stack[p->sp - 1].loc.col);
+		write_str(2, "\n");
+		dump_stack(p);
+		print_error(&p->stack[0], "unexpected token");
+	}
 }
 
 void proc_left_paren(struct parser *p) {
@@ -1258,7 +1347,10 @@ void proc_right_brace(struct parser *p) {
 }
 
 void proc_semi(struct parser *p) {
-	if (p->current->kind == nk_function) {
+	if (p->current->kind == nk_compound_stmt) {
+		proc_stmt(p);
+		p->sp = 0;
+	} else if (p->current->kind == nk_function) {
 		if (!p->current->node_data)
 			print_error(&p->stack[p->sp - 1],
 				    "expected ')' before ';'");
@@ -1292,6 +1384,7 @@ void parse(struct parser *p, struct lexer *l, long debug) {
 			write_str(1, "\n");
 		}
 
+		if (p->stack[p->sp].kind == nk_comment) continue;
 		if (p->stack[p->sp].kind == nk_term)
 			break;
 		else {
