@@ -1169,8 +1169,6 @@ void proc_func_decl(struct parser *p) {
 void proc_fn_params(struct parser *p) {
 	p->sp -= 2;
 
-	dump_stack(p);
-
 	while (p->sp > 0 && p->stack[p->sp].kind != nk_left_paren) {
 		struct node *nnode;
 		proc_build_type(&nnode, p);
