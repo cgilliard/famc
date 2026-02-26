@@ -1,6 +1,6 @@
 #!/bin/sh
 
-SRC="compiler.c";
+SRC="famc.c";
 BIN_DIR="./target/bin";
 BINARY="${BIN_DIR}/famc";
 CC="${CC:-clang}"

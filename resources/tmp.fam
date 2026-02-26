@@ -1,1 +1,0 @@
- fmap_ro((void *)&(&l)->in, fd, size, 0);

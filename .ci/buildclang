@@ -1,0 +1,21 @@
+#!/bin/sh
+
+CC=clang
+SRC=famc.c
+CFLAGS="-O3 \
+	-nostdlib \
+	-fno-builtin \
+	-std=c89 \
+	-Wall \
+	-Wextra \
+	-Werror \
+	-Wshadow \
+	-Wdouble-promotion \
+	-Wpointer-arith \
+	-Wredundant-decls \
+	-Wstrict-prototypes \
+	-pedantic";
+
+COMMAND="${CC} ${CFLAGS} -o famc ${SRC}";
+echo ${COMMAND};
+${COMMAND} || exit 1;
