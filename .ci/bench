@@ -1,0 +1,47 @@
+#!/bin/bash
+
+if [ "$CI" = "true" ]; then
+	sudo apt update
+	sudo apt install tcc
+fi
+
+CC=clang
+SRC=famc.c
+CFLAGS="-O3 \
+        -nostdlib \
+        -fno-builtin \
+        -std=c89 \
+        -Wall \
+        -Wextra \
+        -Werror \
+        -Wshadow \
+        -Wdouble-promotion \
+        -Wpointer-arith \
+        -Wredundant-decls \
+        -Wstrict-prototypes \
+        -pedantic";
+
+COMMAND="${CC} ${CFLAGS} -o famc ${SRC}";
+echo ${COMMAND};
+${COMMAND} || exit 1;
+mkdir -p .ci/tmp
+COMMAND="${CC} .ci/etc/gensamplefn.c -o .ci/tmp/gen";
+echo ${COMMAND};
+${COMMAND} || exit 1;
+COMMAND="./.ci/tmp/gen ./.ci/tmp/test.c"
+echo ${COMMAND};
+${COMMAND} || exit 1;
+
+echo "famc..."
+time famc .ci/tmp/test.c
+echo "tcc..."
+time tcc .ci/tmp/test.c -nostdlib -o .ci/tmp/bench_out.tcc
+echo "gcc..."
+time gcc .ci/tmp/test.c -nostdlib -o .ci/tmp/bench_out.gcc
+echo "clang..."
+time clang .ci/tmp/test.c -nostdlib -o .ci/tmp/bench_out.clang
+echo "gcc -O3..."
+time gcc .ci/tmp/test.c -nostdlib -O3 -o .ci/tmp/bench_out.gcc.03
+echo "clang -O3..."
+time clang .ci/tmp/test.c -nostdlib -O3 -o .ci/tmp/bench_out.clang.03
+
