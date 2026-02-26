@@ -609,49 +609,50 @@ end1:
                 : ({});
 
   if (*in == *"<") {
-    if (++in != l->end && *in == *"=") {
+    ++in != l->end && *in == *"=" ? ({
       next->loc.len = 2;
       next->kind = nk_lte;
       l->off += 2;
-    } else {
-      next->loc.len = 1;
-      next->kind = nk_lt;
-      l->off++;
-    }
+    })
+                                  : ({
+                                      next->loc.len = 1;
+                                      next->kind = nk_lt;
+                                      l->off++;
+                                    });
   } else if (*in == *">") {
-    if (++in != l->end && *in == *"=") {
+    ++in != l->end && *in == *"=" ? ({
       next->loc.len = 2;
       next->kind = nk_gte;
       l->off += 2;
-    } else {
-      next->loc.len = 1;
-      next->kind = nk_gt;
-      l->off++;
-    }
+    })
+                                  : ({
+                                      next->loc.len = 1;
+                                      next->kind = nk_gt;
+                                      l->off++;
+                                    });
   } else if (*in == *"!") {
-    if (++in != l->end && *in == *"=") {
+    ++in != l->end && *in == *"=" ? ({
       next->loc.len = 2;
       next->kind = nk_ne;
       l->off += 2;
-    } else {
-      next->loc.len = 1;
-      next->kind = nk_bang;
-      l->off++;
-    }
+    })
+                                  : ({
+                                      next->loc.len = 1;
+                                      next->kind = nk_bang;
+                                      l->off++;
+                                    });
   } else if (*in == *"\"") {
-  begin2:
-    ++in != l->end ? ({}) : ({ goto end2; });
-    if (*in == *"\"") {
-      if (*(in - 1) != *"\\")
-        goto end2;
-      if (*(in - 2) == *"\\")
-        goto end2;
-    } else if (*in == *"\n") {
-      l->col_start = (in - l->in) + 1;
-      l->line++;
+    while (++in != l->end) {
+      if (*in == *"\"") {
+        if (*(in - 1) != *"\\")
+          break;
+        if (*(in - 2) == *"\\")
+          break;
+      } else if (*in == *"\n") {
+        l->col_start = (in - l->in) + 1;
+        l->line++;
+      }
     }
-    goto begin2;
-  end2:
     if (in != l->end) {
       in++;
       next->loc.len = in - (l->in + l->off);
@@ -662,6 +663,7 @@ end1:
       next->kind = nk_error;
       l->off += next->loc.len;
     }
+
   } else if (*in == *"/") {
     if (++in == l->end || *in != *"*") {
       next->loc.len = 1;
