@@ -965,14 +965,21 @@ void node_print_impl(struct parser *p, struct node *n, long depth) {
 		write(&r, 1, p->in + n->loc.off, n->loc.len);
 		write_str(1, "]");
 	} else if (n->kind == nk_unary_op) {
-		enum unary_op *op = n->node_data;
+		enum unary_op *op;
+		op = n->node_data;
 		write_str(1, " (unary) [");
 		write_num(1, *op);
 		write_str(1, "]");
 	} else if (n->kind == nk_if) {
 		write_str(1, " (if)");
+	} else if (n->kind == nk_else) {
+		write_str(1, " (else)");
 	} else if (n->kind == nk_while) {
 		write_str(1, " (while)");
+	} else if (n->kind == nk_goto) {
+		write_str(1, " (goto)");
+	} else if (n->kind == nk_break) {
+		write_str(1, " (break)");
 	} else if (n->kind == nk_plus) {
 		write_str(1, " (add)");
 	} else if (n->kind == nk_asterisk) {
@@ -1095,7 +1102,8 @@ void proc_build_type(struct node **node, struct parser *p) {
 }
 
 void proc_if(struct parser *p) {
-	struct node *ifn, *cond;
+	struct node *ifn;
+	struct node *cond;
 
 	node_init(p, &ifn, nk_if);
 	copy_location(&ifn->loc, &p->stack[0].loc);
@@ -1104,37 +1112,52 @@ void proc_if(struct parser *p) {
 	node_append(p->current, ifn, 0);
 }
 void proc_break(struct parser *p) {
-	/*
-	write_str(2, "proc_break\n");
-	dump_stack(p);
-	*/
-	(void)p;
+	struct node *breakn;
+
+	if (p->sp != 2) print_error(&p->stack[1], "unexpected token");
+
+	node_init(p, &breakn, nk_break);
+	copy_location(&breakn->loc, &p->stack[0].loc);
+	node_append(p->current, breakn, 0);
 }
 
 void proc_else(struct parser *p) {
-	/*
-	write_str(2, "proc else\n");
-	dump_stack(p);
-	*/
-	(void)p;
+	struct node *elsen;
+
+	node_init(p, &elsen, nk_else);
+	copy_location(&elsen->loc, &p->stack[0].loc);
+	node_append(p->current, elsen, 0);
 }
 
-void proc_goto(struct parser *p) { (void)p; }
+void proc_goto(struct parser *p) {
+	struct node *goton;
+	struct node *label;
+
+	if (p->sp != 3) print_error(&p->stack[1], "unexpected token");
+
+	node_init(p, &goton, nk_goto);
+	copy_location(&goton->loc, &p->stack[0].loc);
+	node_copy(p, &label, &p->stack[1]);
+	node_append(goton, label, 0);
+	node_append(p->current, goton, 0);
+}
 
 void proc_while(struct parser *p) {
-	/*
-	write_str(2, "proc while\n");
-	dump_stack(p);
-	*/
-	(void)p;
+	struct node *whilen;
+	struct node *cond;
+
+	node_init(p, &whilen, nk_while);
+	copy_location(&whilen->loc, &p->stack[0].loc);
+	node_init(p, &cond, nk_expr);
+	node_append(whilen, cond, 0);
+	node_append(p->current, whilen, 0);
 }
 
 void proc_type_decl(struct parser *p) {
-	/*
-	write_str(2, "proc type decl\n");
-	dump_stack(p);
-	*/
-	(void)p;
+	struct node *nnode;
+	p->sp -= 2;
+	proc_build_type(&nnode, p);
+	node_append(p->current, nnode, 0);
 }
 
 void proc_expression(struct parser *p, long offset) {
@@ -1216,7 +1239,16 @@ void proc_compound_stmt_complete(struct parser *p) {
 void proc_compound_stmt(struct parser *p) {
 	struct node *cs;
 
-	if (p->stack[0].kind == nk_if) proc_if(p);
+	if (p->stack[0].kind == nk_if)
+		proc_if(p);
+	else if (p->stack[0].kind == nk_while)
+		proc_while(p);
+	else if (p->stack[0].kind == nk_else)
+		proc_else(p);
+	else if (p->stack[0].kind == nk_goto)
+		proc_goto(p);
+	else if (p->stack[0].kind == nk_break)
+		proc_break(p);
 	node_init(p, &cs, nk_compound_stmt);
 	copy_location(&cs->loc, &p->stack[p->sp - 1].loc);
 	node_append(p->current, cs, 0);
@@ -1255,7 +1287,8 @@ void proc_func_decl(struct parser *p) {
 }
 
 void proc_fn_params(struct parser *p) {
-	char empty = 1;
+	char empty;
+	empty = 1;
 	p->current->node_data = p;
 	p->sp -= 2;
 	while (p->sp >= 0) {
@@ -1269,7 +1302,8 @@ void proc_fn_params(struct parser *p) {
 }
 
 void proc_stmt(struct parser *p, long offset) {
-	enum node_kind kind = p->stack[offset].kind;
+	enum node_kind kind;
+	kind = p->stack[offset].kind;
 
 	if (kind == nk_long || kind == nk_char || kind == nk_void ||
 	    kind == nk_struct || kind == nk_enum)
@@ -1284,6 +1318,17 @@ void proc_stmt(struct parser *p, long offset) {
 		proc_if(p);
 		proc_expression(p,
 				2); /* todo: must be end of condition (not 2) */
+	} else if (kind == nk_else) {
+		proc_else(p);
+		proc_expression(p, 1);
+	} else if (kind == nk_while) {
+		proc_while(p);
+		proc_expression(p,
+				2); /* todo: must be end of condition (not 2) */
+	} else if (kind == nk_goto) {
+		proc_goto(p);
+	} else if (kind == nk_break) {
+		proc_break(p);
 	} else {
 		/*
 		write_num(2, 1 + p->stack[p->sp - 1].loc.line);
@@ -1385,9 +1430,9 @@ void parse(struct parser *p, struct lexer *l, long debug) {
 		}
 
 		if (p->stack[p->sp].kind == nk_comment) continue;
-		if (p->stack[p->sp].kind == nk_term)
+		if (p->stack[p->sp].kind == nk_term) {
 			break;
-		else {
+		} else {
 			enum node_kind kind;
 			kind = p->stack[p->sp].kind;
 			p->sp++;
