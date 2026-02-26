@@ -133,7 +133,6 @@ enum node_kind {
 	nk_double_pipe,
 	nk_double_ampersand,
 	nk_asm,
-	nk_break,
 	nk_char,
 	nk_else,
 	nk_enum,
@@ -143,7 +142,6 @@ enum node_kind {
 	nk_sizeof,
 	nk_struct,
 	nk_void,
-	nk_while,
 	nk_num_lit,
 	nk_str_lit,
 	nk_comment,
@@ -496,49 +494,63 @@ end1:
 		  l->off++;
 		  goto end;
 	  })
+	: *in == *"-" ? ({
+		  (++in != l->end) ? ({
+			  *in == *"="	? ({
+				    next->loc.len = 2;
+				    next->kind = nk_hyphen_equal;
+				    l->off += 2;
+				    goto end;
+			    })
+			  : *in == *"-" ? ({
+				    next->loc.len = 2;
+				    next->kind = nk_double_hyphen;
+				    l->off += 2;
+				    goto end;
+			    })
+			  : *in == *">" ? ({
+				    next->loc.len = 2;
+				    next->kind = nk_arrow;
+				    l->off += 2;
+				    goto end;
+			    })
+					: ({});
+		  })
+				   : ({});
+		  next->loc.len = 1;
+		  next->kind = nk_hyphen;
+		  l->off++;
+		  goto end;
+	  })
 
+	: *in == *"+" ? ({
+		  ++in != l->end ? ({
+			  *in == *"="
+			      ? ({
+					next->loc.len = 2;
+					next->kind = nk_plus_equal;
+					l->off += 2;
+					goto end;
+				})
+			      : ({
+					*in == *"+" ? ({
+						next->loc.len = 2;
+						next->kind = nk_double_plus;
+						l->off += 2;
+						goto end;
+					})
+						    : ({});
+				});
+		  })
+				 : ({});
+		  next->loc.len = 1;
+		  next->kind = nk_plus;
+		  l->off++;
+		  goto end;
+	  })
 		      : ({});
 
-	if (*in == *"-") {
-		if (++in != l->end) {
-			if (*in == *"=") {
-				next->loc.len = 2;
-				next->kind = nk_hyphen_equal;
-				l->off += 2;
-				goto end;
-			} else if (*in == *"-") {
-				next->loc.len = 2;
-				next->kind = nk_double_hyphen;
-				l->off += 2;
-				goto end;
-			} else if (*in == *">") {
-				next->loc.len = 2;
-				next->kind = nk_arrow;
-				l->off += 2;
-				goto end;
-			}
-		}
-		next->loc.len = 1;
-		next->kind = nk_hyphen;
-		l->off++;
-	} else if (*in == *"+") {
-		if (++in != l->end) {
-			if (*in == *"=") {
-				next->loc.len = 2;
-				next->kind = nk_plus_equal;
-				l->off += 2;
-				goto end;
-			} else if (*in == *"+") {
-				next->loc.len = 2;
-				next->kind = nk_double_plus;
-				l->off += 2;
-				goto end;
-			}
-		}
-		next->loc.len = 1;
-		next->kind = nk_plus;
-		l->off++;
-	} else if (*in == *"<") {
+	if (*in == *"<") {
 		if (++in != l->end && *in == *"=") {
 			next->loc.len = 2;
 			next->kind = nk_lte;
@@ -569,15 +581,17 @@ end1:
 			l->off++;
 		}
 	} else if (*in == *"\"") {
-		while (++in != l->end) {
-			if (*in == *"\"") {
-				if (*(in - 1) != *"\\") break;
-				if (*(in - 2) == *"\\") break;
-			} else if (*in == *"\n") {
-				l->col_start = (in - l->in) + 1;
-				l->line++;
-			}
+	begin2:
+		++in != l->end ? ({}) : ({ goto end2; });
+		if (*in == *"\"") {
+			if (*(in - 1) != *"\\") goto end2;
+			if (*(in - 2) == *"\\") goto end2;
+		} else if (*in == *"\n") {
+			l->col_start = (in - l->in) + 1;
+			l->line++;
 		}
+		goto begin2;
+	end2:
 		if (in != l->end) {
 			in++;
 			next->loc.len = in - (l->in + l->off);
@@ -594,13 +608,15 @@ end1:
 			next->kind = nk_div;
 			l->off++;
 		} else {
-			while (++in != l->end) {
-				if (*in == *"/" && *(in - 1) == *"*") break;
-				if (*in == *"\n") {
-					l->col_start = (in - l->in) + 1;
-					l->line++;
-				}
+		begin3:
+			++in != l->end ? ({}) : ({ goto end3; });
+			if (*in == *"/" && *(in - 1) == *"*") goto end3;
+			if (*in == *"\n") {
+				l->col_start = (in - l->in) + 1;
+				l->line++;
 			}
+			goto begin3;
+		end3:
 			if (in == l->end) {
 				next->loc.len = in - (l->in + l->off);
 				next->kind = nk_error;
@@ -632,26 +648,6 @@ end1:
 
 		next->loc.len = (long)(in - (l->in + l->off));
 		next->kind = nk_asm;
-		l->off += next->loc.len;
-	} else if (*in == *"b") {
-		long ch1;
-		long ch2;
-		long ch3;
-		if (++in == l->end || *in != *"r") goto ident;
-		if (++in == l->end || *in != *"e") goto ident;
-		if (++in == l->end || *in != *"a") goto ident;
-		if (++in == l->end || *in != *"k") goto ident;
-
-		if (++in != l->end) {
-			ch1 = (*in - *"a") & 0xFF;
-			ch2 = (*in - *"A") & 0xFF;
-			ch3 = (*in - *"0") & 0xFF;
-			if (ch1 < 26 || ch2 < 26 || ch3 < 10 || *in == *"_")
-				goto ident;
-		}
-
-		next->loc.len = (long)(in - (l->in + l->off));
-		next->kind = nk_break;
 		l->off += next->loc.len;
 	} else if (*in == *"c") {
 		long ch1;
@@ -834,27 +830,6 @@ end1:
 		next->loc.len = (long)(in - (l->in + l->off));
 		next->kind = nk_void;
 		l->off += next->loc.len;
-	} else if (*in == *"w") {
-		long ch1;
-		long ch2;
-		long ch3;
-
-		if (++in == l->end || *in != *"h") goto ident;
-		if (++in == l->end || *in != *"i") goto ident;
-		if (++in == l->end || *in != *"l") goto ident;
-		if (++in == l->end || *in != *"e") goto ident;
-
-		if (++in != l->end) {
-			ch1 = (*in - *"a") & 0xFF;
-			ch2 = (*in - *"A") & 0xFF;
-			ch3 = (*in - *"0") & 0xFF;
-			if (ch1 < 26 || ch2 < 26 || ch3 < 10 || *in == *"_")
-				goto ident;
-		}
-
-		next->loc.len = (long)(in - (l->in + l->off));
-		next->kind = nk_while;
-		l->off += next->loc.len;
 	} else {
 		long ch1;
 		long ch2;
@@ -866,14 +841,15 @@ end1:
 		if (ch1 < 26 || ch2 < 26 || *in == *"_") {
 		ident:
 			in = l->in + l->off;
-			while (++in != l->end) {
-				ch1 = (*in - *"a") & 0xFF;
-				ch2 = (*in - *"A") & 0xFF;
-				ch3 = (*in - *"0") & 0xFF;
-				if (!(ch1 < 26 || ch2 < 26 || ch3 < 10 ||
-				      *in == *"_"))
-					break;
-			}
+		begin4:
+			++in != l->end ? ({}) : ({ goto end4; });
+			ch1 = (*in - *"a") & 0xFF;
+			ch2 = (*in - *"A") & 0xFF;
+			ch3 = (*in - *"0") & 0xFF;
+			if (!(ch1 < 26 || ch2 < 26 || ch3 < 10 || *in == *"_"))
+				goto end4;
+			goto begin4;
+		end4:
 			next->loc.len = (long)(in - (l->in + l->off));
 			next->kind = nk_ident;
 			l->off += next->loc.len;
@@ -895,22 +871,22 @@ end1:
 					is_bin = 1;
 					in++;
 				}
-				while (++in != l->end) {
-					ch1 = (*in - *"0") & 0xFF;
-					if (is_bin && ch1 > 1)
-						break;
-					else if (ch1 >= 10) {
-						if (is_hex) {
-							ch1 =
-							    (*in - *"a") & 0xFF;
-							ch2 =
-							    (*in - *"A") & 0xFF;
-							if (ch1 > 5 && ch2 > 5)
-								break;
-						} else
-							break;
-					}
-				}
+			begin5:
+				++in == l->end ? ({ goto end5; }) : ({});
+				ch1 = (*in - *"0") & 0xFF;
+				is_bin &&ch1 > 1 ? ({ goto end5; }) : ({});
+				ch1 >= 10 ? ({
+					is_hex ? ({
+						ch1 = (*in - *"a") & 0xFF;
+						ch2 = (*in - *"A") & 0xFF;
+						if (ch1 > 5 && ch2 > 5)
+							goto end5;
+					})
+					       : ({ goto end5; });
+				})
+					  : ({});
+				goto begin5;
+			end5:
 				next->loc.len = (long)(in - (l->in + l->off));
 				next->kind = nk_num_lit;
 				l->off += next->loc.len;
@@ -1029,7 +1005,9 @@ void cmain(long argc, char **argv) {
 	lseek(&size, fd, 0, 2);
 	size < 0 ? (
 		       {
-			       write_str(2, "Could not determine file size!\n");
+			       write_str(2,
+					 "Could not determine "
+					 "file size!\n");
 			       exit_group(-1);
 		       })
 		 : ({});
