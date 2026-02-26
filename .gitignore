@@ -1,2 +1,3 @@
 **/*.swp
 famc
+.ci/tmp
