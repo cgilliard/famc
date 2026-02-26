@@ -26,6 +26,76 @@ __asm__(".section .text\n"
         "pop     %rbp\n"
         "ret\n");
 
+struct arena
+{
+  char* start;
+  char* current;
+  char* end;
+};
+
+enum node_kind
+{
+  nk_error,
+  nk_semi,
+  nk_comma,
+  nk_colon,
+  nk_asterisk,
+  nk_questionmark,
+  nk_ampersand,
+  nk_equal,
+  nk_double_equal,
+  nk_gte,
+  nk_sizeof,
+  nk_struct,
+  nk_program,
+  nk_term
+};
+
+struct token_trie
+{
+  enum node_kind kind;
+  long len;
+  struct token_trie* children[256];
+};
+
+struct lexer
+{
+  char* in;
+  char* end;
+  long off;
+  long line;
+  long col_start;
+  struct token_trie root;
+};
+
+struct source_location
+{
+  long off;
+  long len;
+  long line;
+  long col;
+};
+
+struct node
+{
+  enum node_kind kind;
+  struct source_location loc;
+  struct node* parent;
+  struct node* first_child;
+  struct node* last_child;
+  struct node* next_sibling;
+  struct node* prev_sibling;
+  void* node_data;
+};
+
+struct parser
+{
+  char* in;
+  struct arena* a;
+  struct node* root;
+  struct node* current;
+};
+
 void
 syscall(long* result,
         long num,
@@ -199,17 +269,254 @@ end:
 }
 
 void
+arena_init(struct arena** a, long size)
+{
+  struct arena* ret;
+  map((void*)&ret, size + sizeof(struct arena));
+  ret ? ({}) : panic("Could not mmap sufficient memory! Halting.\n");
+  ret->start = ((char*)(ret)) + sizeof(struct arena);
+  ret->end = ret->start + size;
+  ret->current = ret->start;
+  *a = ret;
+}
+
+void
+arena_alloc(void** result, struct arena* a, long size)
+{
+  void* ret;
+  long to_alloc;
+  to_alloc = (size + 7) & 0xFFFFFFFFFFFFFFF8;
+  a->current > a->end - to_alloc || to_alloc > (long)a->end
+    ? panic("Could not allocate memory! Halting.\n")
+    : ({});
+
+  ret = a->current;
+  a->current += to_alloc;
+  *result = ret;
+}
+
+void
+lexer_register(struct lexer* l,
+               struct arena* a,
+               char* s,
+               long len,
+               enum node_kind kind)
+{
+  long i;
+  struct token_trie* cur;
+  cur = &l->root;
+  i = 0;
+
+  while (i < len) {
+    long ch;
+    ch = s[i] & 0xFF;
+    if (cur->children[ch]) {
+      cur = cur->children[ch];
+      if (cur->kind)
+        panic(
+          "Compiler internal error: Must register lexer entries longer first!");
+    } else {
+      arena_alloc((void*)&cur->children[ch], a, sizeof(struct token_trie));
+      cur = cur->children[ch];
+      cur->kind = 0;
+      cur->len = 0;
+      cmemset(cur->children, 0, sizeof(struct token_trie*) * 256);
+    }
+    if (i == len - 1) {
+      cur->kind = kind;
+      cur->len = len;
+    }
+    i++;
+  }
+}
+
+void
+lexer_init(struct lexer* l, struct arena* a, long size)
+{
+  l->end = l->in + size;
+  l->off = 0;
+  l->col_start = 0;
+  l->line = 0;
+  cmemset(&l->root, 0, sizeof(struct token_trie));
+
+  lexer_register(l, a, ";", 1, nk_semi);
+  lexer_register(l, a, "*", 1, nk_asterisk);
+  lexer_register(l, a, ",", 1, nk_comma);
+  lexer_register(l, a, "==", 2, nk_double_equal);
+  lexer_register(l, a, ">=", 2, nk_gte);
+  lexer_register(l, a, "=", 1, nk_equal);
+  lexer_register(l, a, "sizeof", 6, nk_sizeof);
+  lexer_register(l, a, "struct", 6, nk_struct);
+}
+
+void
+lexer_next_token(struct node* next, struct lexer* l)
+{
+  char* in;
+  struct token_trie* node;
+  long ch;
+  in = l->in + l->off;
+
+begin1:
+  in == l->end ? ({ goto end1; }) : ({});
+  (*in - 9) >= 5 && *in != *" " ? ({ goto end1; }) : ({});
+  (*in == *"\n") ? ({
+    l->col_start = (in - l->in) + 1;
+    l->line++;
+  })
+                 : 0;
+  in++;
+  goto begin1;
+end1:
+  l->off = in - l->in;
+  next->loc.off = l->off;
+  next->loc.line = l->line;
+  next->loc.col = l->off - l->col_start;
+
+  in == l->end ? ({
+    next->loc.len = 0;
+    next->kind = nk_term;
+    goto end;
+  })
+               : ({});
+
+  node = &l->root;
+  next->loc.len = 1;
+  next->kind = nk_error;
+  while (in != l->end) {
+    ch = *in++ & 0xFF;
+    if ((node = node->children[ch])) {
+      if (node->len) {
+        next->loc.len = node->len;
+        next->kind = node->kind;
+      }
+    } else
+      break;
+  }
+
+end:
+  l->off += next->loc.len;
+}
+
+void
+node_init(struct parser* p, struct node** n, enum node_kind kind)
+{
+  arena_alloc((void*)n, p->a, sizeof(struct node));
+  cmemset(*n, 0, sizeof(struct node));
+  (*n)->kind = kind;
+}
+
+void
+node_print(struct parser* p, struct node* n)
+{
+  (void)p;
+  (void)n;
+}
+
+void
+print_error(struct node* n, char* msg)
+{
+  write_str(2, "Error: ");
+  n ? ({
+    write_num(2, 1 + n->loc.line);
+    write_str(2, ":");
+    write_num(2, 1 + n->loc.col);
+    write_str(2, ": ");
+  })
+    : ({});
+  write_str(2, msg);
+  write_str(2, "\n");
+  exit_group(-1);
+}
+
+void
+parse(struct parser* p, struct lexer* l, long debug)
+{
+  struct node token;
+begin:
+  lexer_next_token(&token, l);
+  token.kind == nk_error ? print_error(&token, "unrecognized token") : ({});
+  debug&& token.kind <= nk_term ? ({
+    long r;
+    write_str(1, "token=");
+    write_num(1, token.kind);
+    write_str(1, ",offset=");
+    write_num(1, token.loc.off);
+    write_str(1, ",value='");
+    write(&r, 1, l->in + token.loc.off, token.loc.len);
+    write_str(1, "',line=");
+    write_num(1, token.loc.line + 1);
+    write_str(1, ",col=");
+    write_num(1, token.loc.col + 1);
+    write_str(1, "\n");
+  })
+                                : ({});
+
+  token.kind == nk_term ? ({ goto end; }) : ({ goto begin; });
+end:;
+  (void)p;
+}
+
+void
 cmain(long argc, char** argv)
 {
+  long fd;
+  long size;
+  long debug;
   long r;
-  write_num(2, argc);
-  write(&r, 2, "\nhi\n", 4);
+  struct lexer l;
+  struct parser p;
+
+  debug = 0;
+
+  argc < 2 ? (
+               {
+                 write_str(2, "Usage: famc <file>\n");
+                 exit_group(-1);
+               })
+           : ({});
+
   argc > 2 ? ({
-    cstrcmp(&r, argv[1], argv[2]);
-    0;
+    cstrcmp(&r, argv[1], "--debug");
+    r == 0 ? debug = 1 : 0;
   })
-           : ({ r = 0; });
-  exit_group(r);
-  (void)argc;
-  (void)argv;
+           : 0;
+
+  open(&fd, argv[argc - 1], 0, 0);
+  fd < 0 ? (
+             {
+               write_str(2, "Could not open file!\n");
+               exit_group(-1);
+             })
+         : ({});
+
+  lseek(&size, fd, 0, 2);
+  size < 0 ? (
+               {
+                 write_str(2,
+                           "Could not determine "
+                           "file size!\n");
+                 exit_group(-1);
+               })
+           : ({});
+
+  fmap_ro((void*)&(&l)->in, fd, size, 0);
+  l.in == 0 ? ({
+    write_str(2, "Could not mmap file!\n");
+    exit_group(-1);
+  })
+            : ({});
+  close(&r, fd);
+
+  arena_init(&p.a, 256 * 1024 * 1024);
+  node_init(&p, &p.root, nk_program);
+  p.in = l.in;
+  p.current = p.root;
+
+  lexer_init(&l, p.a, size);
+  parse(&p, &l, debug);
+  debug ? node_print(&p, p.root) : ({});
+  debug ? write_str(1, "success!\n") : ({});
+  exit_group(0);
 }
+

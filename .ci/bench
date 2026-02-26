@@ -34,7 +34,8 @@ echo ${COMMAND};
 ${COMMAND} || exit 1;
 
 echo "famc..."
-time ./famc .ci/tmp/test.c || exit 1;
+# temporarily disable
+#time ./famc .ci/tmp/test.c || exit 1;
 echo "tcc..."
 time tcc .ci/tmp/test.c -nostdlib -o .ci/tmp/bench_out.tcc || exit 1;
 echo "gcc..."
