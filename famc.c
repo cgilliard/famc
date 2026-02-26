@@ -47,6 +47,7 @@ enum node_kind
   nk_gte,
   nk_sizeof,
   nk_struct,
+  nk_ident,
   nk_program,
   nk_term
 };
@@ -55,6 +56,7 @@ struct token_trie
 {
   enum node_kind kind;
   long len;
+  long is_reserved_word;
   struct token_trie* children[256];
 };
 
@@ -300,7 +302,8 @@ lexer_register(struct lexer* l,
                struct arena* a,
                char* s,
                long len,
-               enum node_kind kind)
+               enum node_kind kind,
+               long is_reserved_word)
 {
   long i;
   struct token_trie* cur;
@@ -319,12 +322,12 @@ lexer_register(struct lexer* l,
       arena_alloc((void*)&cur->children[ch], a, sizeof(struct token_trie));
       cur = cur->children[ch];
       cur->kind = 0;
-      cur->len = 0;
       cmemset(cur->children, 0, sizeof(struct token_trie*) * 256);
     }
     if (i == len - 1) {
       cur->kind = kind;
       cur->len = len;
+      cur->is_reserved_word = is_reserved_word;
     }
     i++;
   }
@@ -339,14 +342,14 @@ lexer_init(struct lexer* l, struct arena* a, long size)
   l->line = 0;
   cmemset(&l->root, 0, sizeof(struct token_trie));
 
-  lexer_register(l, a, ";", 1, nk_semi);
-  lexer_register(l, a, "*", 1, nk_asterisk);
-  lexer_register(l, a, ",", 1, nk_comma);
-  lexer_register(l, a, "==", 2, nk_double_equal);
-  lexer_register(l, a, ">=", 2, nk_gte);
-  lexer_register(l, a, "=", 1, nk_equal);
-  lexer_register(l, a, "sizeof", 6, nk_sizeof);
-  lexer_register(l, a, "struct", 6, nk_struct);
+  lexer_register(l, a, ";", 1, nk_semi, 0);
+  lexer_register(l, a, "*", 1, nk_asterisk, 0);
+  lexer_register(l, a, ",", 1, nk_comma, 0);
+  lexer_register(l, a, "==", 2, nk_double_equal, 0);
+  lexer_register(l, a, ">=", 2, nk_gte, 0);
+  lexer_register(l, a, "=", 1, nk_equal, 0);
+  lexer_register(l, a, "sizeof", 6, nk_sizeof, 1);
+  lexer_register(l, a, "struct", 6, nk_struct, 1);
 }
 
 void
@@ -390,9 +393,46 @@ end1:
         next->loc.len = node->len;
         next->kind = node->kind;
       }
-    } else
+    } else {
+      if (next->kind) {
+        long ch1;
+        long ch2;
+        long ch3;
+        ch1 = (ch - *"a") & 0xFF;
+        ch2 = (ch - *"A") & 0xFF;
+        ch3 = (ch - *"0") & 0xFF;
+
+        if (ch1 < 26 || ch2 < 26 || ch3 < 10 || ch == *"_") {
+          next->kind = nk_error;
+          next->loc.len = 1;
+        }
+      }
       break;
+    }
   }
+
+  next->kind == nk_error ? ({
+    long ch1;
+    long ch2;
+    long ch3;
+    in = l->in + l->off;
+    ch1 = (*in - *"a") & 0xFF;
+    ch2 = (*in - *"A") & 0xFF;
+
+    if (ch1 < 26 || ch2 < 26 || *in == *"_") {
+      while (++in != l->end) {
+        ch1 = (*in - *"a") & 0xFF;
+        ch2 = (*in - *"A") & 0xFF;
+        ch3 = (*in - *"0") & 0xFF;
+        if (!(ch1 < 26 || ch2 < 26 || ch3 < 10 || *in == *"_")) {
+          break;
+        }
+      }
+      next->loc.len = in - (l->in + l->off);
+      next->kind = nk_ident;
+    }
+  })
+                         : ({ goto end; });
 
 end:
   l->off += next->loc.len;
