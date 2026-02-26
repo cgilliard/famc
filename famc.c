@@ -36,6 +36,7 @@ struct arena
 enum node_kind
 {
   nk_error,
+  nk_comment,
   nk_semi,
   nk_comma,
   nk_colon,
@@ -48,6 +49,8 @@ enum node_kind
   nk_sizeof,
   nk_struct,
   nk_ident,
+  nk_str_lit,
+  nk_num_lit,
   nk_program,
   nk_term
 };
@@ -348,6 +351,7 @@ lexer_init(struct lexer* l, struct arena* a, long size)
   lexer_register(l, a, "==", 2, nk_double_equal, 0);
   lexer_register(l, a, ">=", 2, nk_gte, 0);
   lexer_register(l, a, "=", 1, nk_equal, 0);
+  lexer_register(l, a, "/*", 2, nk_comment, 0);
   lexer_register(l, a, "sizeof", 6, nk_sizeof, 1);
   lexer_register(l, a, "struct", 6, nk_struct, 1);
 }
@@ -383,6 +387,32 @@ end1:
   })
                : ({});
 
+  *in == *"\"" ? ({
+    begin2:
+      ++in != l->end ? ({}) : ({ goto end2; });
+      if (*in == *"\"") {
+        if (*(in - 1) != *"\\")
+          goto end2;
+        if (*(in - 2) == *"\\")
+          goto end2;
+      } else if (*in == *"\n") {
+        l->col_start = (in - l->in) + 1;
+        l->line++;
+      }
+      goto begin2;
+    end2:
+      if (in != l->end) {
+        in++;
+        next->loc.len = in - (l->in + l->off);
+        next->kind = nk_str_lit;
+      } else {
+        next->loc.len = in - (l->in + l->off);
+        next->kind = nk_error;
+      }
+      goto end;
+  })
+               : ({});
+
   node = &l->root;
   next->loc.len = 1;
   next->kind = nk_error;
@@ -415,6 +445,7 @@ end1:
     long ch1;
     long ch2;
     long ch3;
+
     in = l->in + l->off;
     ch1 = (*in - *"a") & 0xFF;
     ch2 = (*in - *"A") & 0xFF;
@@ -431,9 +462,30 @@ end1:
       next->loc.len = in - (l->in + l->off);
       next->kind = nk_ident;
     }
+    goto end;
   })
-                         : ({ goto end; });
+                         : ({});
 
+  next->kind == nk_comment ? ({
+    begin3:
+      ++in != l->end ? ({}) : ({ goto end3; });
+      if (*in == *"/" && *(in - 1) == *"*")
+        goto end3;
+      if (*in == *"\n") {
+        l->col_start = (in - l->in) + 1;
+        l->line++;
+      }
+      goto begin3;
+    end3:
+      if (in == l->end) {
+        next->loc.len = in - (l->in + l->off);
+        next->kind = nk_error;
+      } else {
+        next->loc.len = in - (l->in + l->off) + 1;
+        next->kind = nk_comment;
+      }
+  })
+                           : ({});
 end:
   l->off += next->loc.len;
 }
