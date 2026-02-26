@@ -642,17 +642,19 @@ end1:
                                       l->off++;
                                     });
   } else if (*in == *"\"") {
-    while (++in != l->end) {
-      if (*in == *"\"") {
-        if (*(in - 1) != *"\\")
-          break;
-        if (*(in - 2) == *"\\")
-          break;
-      } else if (*in == *"\n") {
-        l->col_start = (in - l->in) + 1;
-        l->line++;
-      }
+  begin2:
+    ++in != l->end ? ({}) : ({ goto end2; });
+    if (*in == *"\"") {
+      if (*(in - 1) != *"\\")
+        goto end2;
+      if (*(in - 2) == *"\\")
+        goto end2;
+    } else if (*in == *"\n") {
+      l->col_start = (in - l->in) + 1;
+      l->line++;
     }
+    goto begin2;
+  end2:
     if (in != l->end) {
       in++;
       next->loc.len = in - (l->in + l->off);
@@ -663,7 +665,6 @@ end1:
       next->kind = nk_error;
       l->off += next->loc.len;
     }
-
   } else if (*in == *"/") {
     if (++in == l->end || *in != *"*") {
       next->loc.len = 1;
