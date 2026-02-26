@@ -956,46 +956,43 @@ void proc_right_brace(struct parser *p) { p->sp = 0; }
 void proc_semi(struct parser *p) { p->sp = 0; }
 
 void parse(struct parser *p, struct lexer *l, long debug) {
-	while (1) {
-		if (p->sp >= p->capacity) panic("Stack overflow!");
-		lexer_next_token(&p->stack[p->sp], l);
-		if (p->stack[p->sp].kind == nk_error)
-			print_error(&p->stack[p->sp], "unrecognized token");
-		if (debug && p->stack[p->sp].kind <= nk_term) {
-			long r;
-			write_str(1, "token=");
-			write_num(1, p->stack[p->sp].kind);
-			write_str(1, ",offset=");
-			write_num(1, p->stack[p->sp].loc.off);
-			write_str(1, ",value='");
-			write(&r, 1, l->in + p->stack[p->sp].loc.off,
-			      p->stack[p->sp].loc.len);
-			write_str(1, "',line=");
-			write_num(1, p->stack[p->sp].loc.line + 1);
-			write_str(1, ",col=");
-			write_num(1, p->stack[p->sp].loc.col + 1);
-			write_str(1, "\n");
-		}
+begin:
+	p->sp >= p->capacity ? panic("Stack overflow!") : ({});
+	lexer_next_token(&p->stack[p->sp], l);
+	p->stack[p->sp].kind == nk_error
+	    ? print_error(&p->stack[p->sp], "unrecognized token")
+	    : ({});
+	debug && p->stack[p->sp].kind <= nk_term ? ({
+		long r;
+		write_str(1, "token=");
+		write_num(1, p->stack[p->sp].kind);
+		write_str(1, ",offset=");
+		write_num(1, p->stack[p->sp].loc.off);
+		write_str(1, ",value='");
+		write(&r, 1, l->in + p->stack[p->sp].loc.off,
+		      p->stack[p->sp].loc.len);
+		write_str(1, "',line=");
+		write_num(1, p->stack[p->sp].loc.line + 1);
+		write_str(1, ",col=");
+		write_num(1, p->stack[p->sp].loc.col + 1);
+		write_str(1, "\n");
+	})
+						 : ({});
 
-		if (p->stack[p->sp].kind == nk_comment) continue;
-		if (p->stack[p->sp].kind == nk_term) {
-			break;
-		} else {
-			enum node_kind kind;
-			kind = p->stack[p->sp].kind;
-			p->sp++;
-			if (kind == nk_right_paren)
-				proc_right_paren(p);
-			else if (kind == nk_left_paren)
-				proc_left_paren(p);
-			else if (kind == nk_left_brace)
-				proc_left_brace(p);
-			else if (kind == nk_right_brace)
-				proc_right_brace(p);
-			else if (kind == nk_semi)
-				proc_semi(p);
-		}
-	}
+	p->stack[p->sp].kind == nk_comment ? ({ goto begin; }) : ({});
+	p->stack[p->sp].kind == nk_term ? ({ goto end; }) : ({
+		enum node_kind kind;
+		kind = p->stack[p->sp].kind;
+		p->sp++;
+		kind == nk_right_paren	 ? proc_right_paren(p)
+		: kind == nk_left_paren	 ? proc_left_paren(p)
+		: kind == nk_left_brace	 ? proc_left_brace(p)
+		: kind == nk_right_brace ? proc_right_brace(p)
+		: kind == nk_semi	 ? proc_semi(p)
+					 : ({});
+	});
+	goto begin;
+end:;
 }
 
 void cmain(long argc, char **argv) {
@@ -1008,33 +1005,41 @@ void cmain(long argc, char **argv) {
 
 	debug = 0;
 
-	if (argc < 2) {
-		write_str(2, "Usage: famc <file>\n");
-		exit_group(-1);
-	}
+	argc < 2 ? (
+		       {
+			       write_str(2, "Usage: famc <file>\n");
+			       exit_group(-1);
+		       })
+		 : ({});
 
-	if (argc > 2) {
+	argc > 2 ? ({
 		cstrcmp(&r, argv[1], "--debug");
-		if (r == 0) debug = 1;
-	}
+		r == 0 ? debug = 1 : 0;
+	})
+		 : 0;
 
 	open(&fd, argv[argc - 1], 0, 0);
-	if (fd < 0) {
-		write_str(2, "Could not open file!\n");
-		exit_group(-1);
-	}
+	fd < 0 ? (
+		     {
+			     write_str(2, "Could not open file!\n");
+			     exit_group(-1);
+		     })
+	       : ({});
 
 	lseek(&size, fd, 0, 2);
-	if (size < 0) {
-		write_str(2, "Could not determine file size!\n");
-		exit_group(-1);
-	}
+	size < 0 ? (
+		       {
+			       write_str(2, "Could not determine file size!\n");
+			       exit_group(-1);
+		       })
+		 : ({});
 
 	fmap_ro((void *)&(&l)->in, fd, size, 0);
-	if (l.in == 0) {
+	l.in == 0 ? ({
 		write_str(2, "Could not mmap file!\n");
 		exit_group(-1);
-	}
+	})
+		  : ({});
 	close(&r, fd);
 
 	arena_init(&p.a, 256 * 1024 * 1024, 8);
@@ -1044,7 +1049,7 @@ void cmain(long argc, char **argv) {
 	p.sp = 0;
 	p.capacity = 4096;
 	map((void *)&p.stack, sizeof(struct node) * 4096);
-	if (!p.stack) panic("could not allocate stack");
+	p.stack ? ({}) : panic("could not allocate stack");
 
 	l.end = l.in + size;
 	l.off = 0;
@@ -1052,9 +1057,7 @@ void cmain(long argc, char **argv) {
 	l.line = 0;
 
 	parse(&p, &l, debug);
-	if (debug) node_print(&p, p.root);
-
-	if (debug) write_str(1, "success!\n");
-
+	debug ? node_print(&p, p.root) : ({});
+	debug ? write_str(1, "success!\n") : ({});
 	exit_group(0);
 }
