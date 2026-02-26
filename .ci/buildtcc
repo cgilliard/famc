@@ -1,7 +1,9 @@
 #!/bin/sh
 
-sudo apt update
-sudo apt install tcc
+if [ "$CI" = "true" ]; then
+	sudo apt update
+	sudo apt install tcc
+fi
 
 CC=tcc
 SRC=famc.c

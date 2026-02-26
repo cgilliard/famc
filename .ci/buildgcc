@@ -13,8 +13,7 @@ CFLAGS="-O3 \
 	-Wdouble-promotion \
 	-Wpointer-arith \
 	-Wredundant-decls \
-	-Wstrict-prototypes \
-	-pedantic";
+	-Wstrict-prototypes";
 
 COMMAND="${CC} ${CFLAGS} -o famc ${SRC}";
 echo ${COMMAND};
