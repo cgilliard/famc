@@ -33,4 +33,7 @@ void syscall(long *result, long num, long r1, long r2, long r3, long r4,
 
 void exit_group(long status) { syscall(&status, 231, status, 0, 0, 0, 0, 0); }
 
-void cmain(long argc, char **argv) { exit_group(argc + argv[0][0]); }
+void cmain(long argc, char **argv) {
+	exit_group(argc + argv[0][0]);
+	x
+}
