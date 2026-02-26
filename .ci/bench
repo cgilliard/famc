@@ -33,15 +33,15 @@ echo ${COMMAND};
 ${COMMAND} || exit 1;
 
 echo "famc..."
-time famc .ci/tmp/test.c
+time ./famc .ci/tmp/test.c || exit 1;
 echo "tcc..."
-time tcc .ci/tmp/test.c -nostdlib -o .ci/tmp/bench_out.tcc
+time tcc .ci/tmp/test.c -nostdlib -o .ci/tmp/bench_out.tcc || exit 1;
 echo "gcc..."
-time gcc .ci/tmp/test.c -nostdlib -o .ci/tmp/bench_out.gcc
+time gcc .ci/tmp/test.c -nostdlib -o .ci/tmp/bench_out.gcc || exit 1;
 echo "clang..."
-time clang .ci/tmp/test.c -nostdlib -o .ci/tmp/bench_out.clang
+time clang .ci/tmp/test.c -nostdlib -o .ci/tmp/bench_out.clang || exit 1;
 echo "gcc -O3..."
-time gcc .ci/tmp/test.c -nostdlib -O3 -o .ci/tmp/bench_out.gcc.03
+time gcc .ci/tmp/test.c -nostdlib -O3 -o .ci/tmp/bench_out.gcc.03 || exit 1;
 echo "clang -O3..."
-time clang .ci/tmp/test.c -nostdlib -O3 -o .ci/tmp/bench_out.clang.03
+time clang .ci/tmp/test.c -nostdlib -O3 -o .ci/tmp/bench_out.clang.03 || exit 1;
 
