@@ -27,6 +27,7 @@ jobs:
           - buildgcc
           - buildclang
           - buildtcc
+          - bench
     steps:
       - name: Checkout code
         uses: actions/checkout@v4  # Updated to latest version
