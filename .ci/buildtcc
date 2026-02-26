@@ -1,5 +1,8 @@
 #!/bin/sh
 
+sudo apt update
+sudo apt install tcc
+
 CC=tcc
 SRC=famc.c
 CFLAGS="-O3 \
