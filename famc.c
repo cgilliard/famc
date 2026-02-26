@@ -366,96 +366,140 @@ end1:
 	next->loc.off = l->off;
 	next->loc.line = l->line;
 	next->loc.col = l->off - l->col_start;
-	if (in == l->end) {
-		next->loc.len = 0;
-		next->kind = nk_term;
-	} else if (*in == *";") {
-		next->loc.len = 1;
-		next->kind = nk_semi;
-		l->off++;
-	} else if (*in == *",") {
-		next->loc.len = 1;
-		next->kind = nk_comma;
-		l->off++;
-	} else if (*in == *":") {
-		next->loc.len = 1;
-		next->kind = nk_colon;
-		l->off++;
-	} else if (*in == *"*") {
-		next->loc.len = 1;
-		next->kind = nk_asterisk;
-		l->off++;
-	} else if (*in == *"?") {
-		next->loc.len = 1;
-		next->kind = nk_questionmark;
-		l->off++;
-	} else if (*in == *"%") {
-		next->loc.len = 1;
-		next->kind = nk_mod;
-		l->off++;
-	} else if (*in == *"~") {
-		next->loc.len = 1;
-		next->kind = nk_tilde;
-		l->off++;
-	} else if (*in == *"|") {
-		if (++in != l->end && *in == *"|") {
-			next->loc.len = 2;
-			next->kind = nk_double_pipe;
-			l->off += 2;
-		} else {
-			next->loc.len = 1;
-			next->kind = nk_pipe;
-			l->off++;
-		}
-	} else if (*in == *".") {
-		next->loc.len = 1;
-		next->kind = nk_dot;
-		l->off++;
-	} else if (*in == *"&") {
-		if (++in != l->end && *in == *"&") {
-			next->loc.len = 2;
-			next->kind = nk_double_ampersand;
-			l->off += 2;
-		} else {
-			next->loc.len = 1;
-			next->kind = nk_ampersand;
-			l->off++;
-		}
-	} else if (*in == *"=") {
-		if (++in != l->end && *in == *"=") {
-			next->loc.len = 2;
-			next->kind = nk_double_equal;
-			l->off += 2;
-		} else {
-			next->loc.len = 1;
-			next->kind = nk_equal;
-			l->off++;
-		}
-	} else if (*in == *"(") {
-		next->loc.len = 1;
-		next->kind = nk_left_paren;
-		l->off++;
-	} else if (*in == *")") {
-		next->loc.len = 1;
-		next->kind = nk_right_paren;
-		l->off++;
-	} else if (*in == *"{") {
-		next->loc.len = 1;
-		next->kind = nk_left_brace;
-		l->off++;
-	} else if (*in == *"}") {
-		next->loc.len = 1;
-		next->kind = nk_right_brace;
-		l->off++;
-	} else if (*in == *"[") {
-		next->loc.len = 1;
-		next->kind = nk_left_bracket;
-		l->off++;
-	} else if (*in == *"]") {
-		next->loc.len = 1;
-		next->kind = nk_right_bracket;
-		l->off++;
-	} else if (*in == *"-") {
+	in == l->end  ? ({
+		 next->loc.len = 0;
+		 next->kind = nk_term;
+		 goto end;
+	 })
+	: *in == *";" ? ({
+		  next->loc.len = 1;
+		  next->kind = nk_semi;
+		  l->off++;
+		  goto end;
+	  })
+	: *in == *"," ? ({
+		  next->loc.len = 1;
+		  next->kind = nk_comma;
+		  l->off++;
+		  goto end;
+	  })
+	: *in == *":" ? ({
+		  next->loc.len = 1;
+		  next->kind = nk_colon;
+		  l->off++;
+		  goto end;
+	  })
+	: *in == *"*" ? ({
+		  next->loc.len = 1;
+		  next->kind = nk_asterisk;
+		  l->off++;
+		  goto end;
+	  })
+	: *in == *"?" ? ({
+		  next->loc.len = 1;
+		  next->kind = nk_questionmark;
+		  l->off++;
+		  goto end;
+	  })
+	: *in == *"%" ? ({
+		  next->loc.len = 1;
+		  next->kind = nk_mod;
+		  l->off++;
+		  goto end;
+	  })
+	: *in == *"~" ? ({
+		  next->loc.len = 1;
+		  next->kind = nk_tilde;
+		  l->off++;
+		  goto end;
+	  })
+	: *in == *"|" ? ({
+		  ++in != l->end && *in == *"|" ? ({
+			  next->loc.len = 2;
+			  next->kind = nk_double_pipe;
+			  l->off += 2;
+		  })
+						: ({
+							  next->loc.len = 1;
+							  next->kind = nk_pipe;
+							  l->off++;
+						  });
+		  goto end;
+	  })
+	: *in == *"." ? ({
+		  next->loc.len = 1;
+		  next->kind = nk_dot;
+		  l->off++;
+		  goto end;
+	  })
+	: *in == *"&" ? ({
+		  ++in != l->end && *in == *"&"
+		      ? ({
+				next->loc.len = 2;
+				next->kind = nk_double_ampersand;
+				l->off += 2;
+			})
+		      : ({
+				next->loc.len = 1;
+				next->kind = nk_ampersand;
+				l->off++;
+			});
+		  goto end;
+	  })
+
+	: *in == *"=" ? ({
+		  ++in != l->end && *in == *"=" ? ({
+			  next->loc.len = 2;
+			  next->kind = nk_double_equal;
+			  l->off += 2;
+		  })
+						: ({
+							  next->loc.len = 1;
+							  next->kind = nk_equal;
+							  l->off++;
+						  });
+		  goto end;
+	  })
+	: *in == *"(" ? ({
+		  next->loc.len = 1;
+		  next->kind = nk_left_paren;
+		  l->off++;
+		  goto end;
+	  })
+	: *in == *")" ? ({
+		  next->loc.len = 1;
+		  next->kind = nk_right_paren;
+		  l->off++;
+		  goto end;
+	  })
+	: *in == *"{" ? ({
+		  next->loc.len = 1;
+		  next->kind = nk_left_brace;
+		  l->off++;
+		  goto end;
+	  })
+	: *in == *"}" ? ({
+		  next->loc.len = 1;
+		  next->kind = nk_right_brace;
+		  l->off++;
+		  goto end;
+	  })
+	: *in == *"[" ? ({
+		  next->loc.len = 1;
+		  next->kind = nk_left_bracket;
+		  l->off++;
+		  goto end;
+	  })
+	: *in == *"]" ? ({
+		  next->loc.len = 1;
+		  next->kind = nk_right_bracket;
+		  l->off++;
+		  goto end;
+	  })
+
+		      : ({});
+
+	if (*in == *"-") {
 		if (++in != l->end) {
 			if (*in == *"=") {
 				next->loc.len = 2;
@@ -770,7 +814,6 @@ end1:
 		next->loc.len = (long)(in - (l->in + l->off));
 		next->kind = nk_sizeof;
 		l->off += next->loc.len;
-
 	} else if (*in == *"v") {
 		long ch1;
 		long ch2;
@@ -894,12 +937,13 @@ void node_print(struct parser *p, struct node *n) {
 
 void print_error(struct node *n, char *msg) {
 	write_str(2, "Error: ");
-	if (n) {
+	n ? ({
 		write_num(2, 1 + n->loc.line);
 		write_str(2, ":");
 		write_num(2, 1 + n->loc.col);
 		write_str(2, ": ");
-	}
+	})
+	  : ({});
 	write_str(2, msg);
 	write_str(2, "\n");
 	exit_group(-1);
