@@ -128,6 +128,7 @@ struct lexer
   long line;
   long col_start;
   struct token_trie root;
+  long debug;
 };
 
 struct source_location
@@ -435,12 +436,13 @@ end:;
 }
 
 void
-lexer_init(struct lexer* l, struct arena* a, long size)
+lexer_init(struct lexer* l, struct arena* a, long size, long debug)
 {
   l->end = l->in + size;
   l->off = 0;
   l->col_start = 0;
   l->line = 0;
+  l->debug = debug;
   cmemset(&l->root, 0, sizeof(struct token_trie));
 
   lexer_register(l, a, ";", 1, nk_semi, 0);
@@ -694,6 +696,21 @@ end3:
                            : ({ 0; });
 end:
   !peek ? l->off += next->loc.len : ({ 0; });
+  l->debug ? ({
+    long r;
+    write_str(1, "token=");
+    write_num(1, next->kind);
+    write_str(1, ",offset=");
+    write_num(1, next->loc.off);
+    write_str(1, ",value='");
+    write(&r, 1, l->in + next->loc.off, next->loc.len);
+    write_str(1, "',line=");
+    write_num(1, next->loc.line + 1);
+    write_str(1, ",col=");
+    write_num(1, next->loc.col + 1);
+    write_str(1, "\n");
+  })
+           : ({});
 }
 
 void
@@ -1341,7 +1358,7 @@ cmain(long argc, char** argv)
   p.in = l.in;
   p.current = p.root;
 
-  lexer_init(&l, p.a, size);
+  lexer_init(&l, p.a, size, debug);
   parse(&p, &l, debug);
   debug ? node_print(&p, p.root) : ({});
   debug ? write_str(1, "success!\n") : ({});
