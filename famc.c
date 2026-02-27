@@ -1183,7 +1183,6 @@ parse_goto(struct parser* p, struct lexer* l)
 
   lexer_next_token(&token, l, 0);
   token.kind != nk_semi ? print_error(&token, "expected ';'") : ({});
-  (void)p;
 }
 
 void
