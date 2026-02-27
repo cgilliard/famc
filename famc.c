@@ -33,6 +33,29 @@ struct arena
   char* end;
 };
 
+struct slice
+{
+  void* ptr;
+  long len;
+};
+
+enum type_kind
+{
+  type_kind_struct,
+  type_kind_enum,
+  type_kind_long,
+  type_kind_char,
+  type_kind_void
+};
+
+struct type_data
+{
+  enum type_kind kind;
+  struct slice type_name;
+  struct slice var_name;
+  long levels;
+};
+
 enum node_kind
 {
   nk_error,
@@ -80,6 +103,7 @@ enum node_kind
   nk_str_lit,
   nk_num_lit,
   nk_program,
+  nk_type,
   nk_term
 };
 
@@ -394,7 +418,7 @@ lexer_init(struct lexer* l, struct arena* a, long size)
   lexer_register(l, a, "(", 1, nk_left_paren, 0);
   lexer_register(l, a, ")", 1, nk_right_paren, 0);
   lexer_register(l, a, "{", 1, nk_left_brace, 0);
-  lexer_register(l, a, "}", 1, nk_left_brace, 0);
+  lexer_register(l, a, "}", 1, nk_right_brace, 0);
   lexer_register(l, a, "[", 1, nk_left_bracket, 0);
   lexer_register(l, a, "]", 1, nk_right_bracket, 0);
   lexer_register(l, a, ".", 1, nk_dot, 0);
@@ -429,7 +453,7 @@ lexer_init(struct lexer* l, struct arena* a, long size)
 }
 
 void
-lexer_next_token(struct node* next, struct lexer* l)
+lexer_next_token(struct node* next, struct lexer* l, long peek)
 {
   char* in;
   struct token_trie* node;
@@ -636,7 +660,16 @@ end3:
   })
                            : ({ 0; });
 end:
-  l->off += next->loc.len;
+  !peek ? l->off += next->loc.len : ({ 0; });
+}
+
+void
+copy_location(struct source_location* dst, struct source_location* src)
+{
+  dst->off = src->off;
+  dst->len = src->len;
+  dst->line = src->line;
+  dst->col = src->col;
 }
 
 void
@@ -648,10 +681,126 @@ node_init(struct parser* p, struct node** n, enum node_kind kind)
 }
 
 void
+node_copy(struct parser* p, struct node** dst, struct node* src)
+{
+  node_init(p, dst, src->kind);
+  copy_location(&(*dst)->loc, &src->loc);
+}
+
+void
+node_append(struct node* parent, struct node* child, long prepend)
+{
+  child->parent = parent;
+  parent->last_child ? ({
+    prepend ? ({ parent->first_child->prev_sibling = child; })
+            : ({ parent->last_child->next_sibling = child; });
+  })
+                     : ({
+                         prepend ? ({ parent->last_child = child; })
+                                 : ({ parent->first_child = child; });
+                       });
+  prepend ? ({
+    child->next_sibling = parent->first_child;
+    parent->first_child = child;
+  })
+          : ({
+              child->prev_sibling = parent->last_child;
+              parent->last_child = child;
+            });
+}
+
+void
+alloc_slice(struct slice** s, struct arena* a, void* ptr, long len)
+{
+  arena_alloc((void*)s, a, sizeof(struct slice));
+  (*s)->ptr = ptr;
+  (*s)->len = len;
+}
+
+void
+node_print_impl(struct parser* p, struct node* n, long depth)
+{
+  long i;
+  long r;
+  struct node* child;
+
+  child = n->first_child;
+  i = 0;
+
+begin_depth:
+  i++ < depth ? ({}) : ({ goto end_depth; });
+  write_str(1, "   ");
+  goto begin_depth;
+end_depth:
+  write_str(1, "kind=");
+  write_num(1, n->kind);
+
+  n->kind == nk_program ? ({
+    write_str(1, " (program)");
+    goto end;
+  })
+                        : ({});
+
+  n->kind == nk_program ? ({
+    write_str(1, " (asm)");
+    goto end;
+  })
+                        : ({});
+
+  n->kind == nk_enum ? ({
+    struct slice* s;
+    s = n->node_data;
+    write_str(1, " (enum) [");
+    write(&r, 1, s->ptr, s->len);
+    write_str(1, "]");
+    goto end;
+  })
+                     : ({});
+
+  n->kind == nk_ident ? ({
+    write_str(1, " (ident) [");
+    write(&r, 1, p->in + n->loc.off, n->loc.len);
+    write_str(1, "]");
+
+    goto end;
+  })
+                      : ({});
+
+  n->kind == nk_struct ? ({
+    struct slice* s;
+    s = n->node_data;
+    write_str(1, " (struct) [");
+    write(&r, 1, s->ptr, s->len);
+    write_str(1, "]");
+
+    goto end;
+  })
+                       : ({});
+
+  n->kind == nk_str_lit ? ({
+    write_str(1, " (string literal) [");
+    write(&r, 1, p->in + n->loc.off, n->loc.len);
+    write_str(1, "]");
+
+    goto end;
+  })
+                        : ({});
+
+end:
+
+  write_str(1, "\n");
+begin_child:
+  child ? ({}) : ({ goto end_child; });
+  node_print_impl(p, child, depth + 1);
+  child = child->next_sibling;
+  goto begin_child;
+end_child:;
+}
+
+void
 node_print(struct parser* p, struct node* n)
 {
-  (void)p;
-  (void)n;
+  node_print_impl(p, n, 0);
 }
 
 void
@@ -671,11 +820,163 @@ print_error(struct node* n, char* msg)
 }
 
 void
+parse_enum(struct parser* p, struct lexer* l)
+{
+  struct node* enum_node;
+  struct node* variant;
+  struct node token;
+  struct slice* name;
+
+  node_init(p, &enum_node, nk_enum);
+  node_append(p->current, enum_node, 0);
+  p->current = enum_node;
+
+  lexer_next_token(&token, l, 0);
+  token.kind != nk_ident ? print_error(&token, "expected identifier") : ({});
+
+  alloc_slice(&name, p->a, p->in + token.loc.off, token.loc.len);
+  enum_node->node_data = name;
+
+  lexer_next_token(&token, l, 0);
+  token.kind != nk_left_brace ? print_error(&token, "expected '{'") : ({});
+
+begin:
+  lexer_next_token(&token, l, 0);
+  token.kind != nk_ident ? print_error(&token, "expected identifier") : ({});
+  node_copy(p, &variant, &token);
+  node_append(p->current, variant, 0);
+  lexer_next_token(&token, l, 0);
+  token.kind == nk_right_brace ? ({ goto end; }) : ({});
+  token.kind != nk_comma ? print_error(&token, "expected ',' or '}'") : ({});
+  goto begin;
+end:
+  p->current = p->current->parent;
+}
+
+void
+parse_asm(struct parser* p, struct lexer* l)
+{
+  struct node* asm_node;
+  struct node* str;
+  struct node token;
+
+  node_init(p, &asm_node, nk_asm);
+  node_append(p->current, asm_node, 0);
+  p->current = asm_node;
+
+  lexer_next_token(&token, l, 0);
+  token.kind != nk_left_paren ? print_error(&token, "expected '('") : ({});
+
+begin:
+  lexer_next_token(&token, l, 0);
+  token.kind == nk_right_paren ? ({ goto end; }) : ({});
+  token.kind != nk_str_lit
+    ? ({ print_error(&token, "expected a string literal"); })
+    : ({});
+  node_copy(p, &str, &token);
+  node_append(p->current, str, 0);
+  goto begin;
+end:
+
+  p->current = p->current->parent;
+}
+
+void
+parse_type(struct node** result, struct parser* p, struct lexer* l)
+{
+  struct node* ret;
+  struct type_data* td;
+  struct node token;
+
+  ret = 0;
+
+  lexer_next_token(&token, l, 0);
+  token.kind == nk_right_brace ? ({ goto end; }) : ({});
+
+  node_init(p, &ret, nk_type);
+  arena_alloc((void*)&td, p->a, sizeof(struct type_data));
+  ret->node_data = td;
+
+  token.kind != nk_long&& token.kind != nk_char&& token.kind !=
+      nk_void&& token.kind != nk_enum&& token.kind != nk_struct
+    ? print_error(&token, "expected one of (long, char, void, enum, struct)")
+    : ({});
+
+  token.kind == nk_enum || token.kind == nk_struct
+    ? ({ lexer_next_token(&token, l, 0); })
+    : ({});
+
+begin_loop:
+  lexer_next_token(&token, l, 0);
+  token.kind != nk_asterisk ? ({ goto end_loop; }) : ({});
+  goto begin_loop;
+end_loop:
+
+  token.kind != nk_ident ? print_error(&token, "expected identifier") : ({});
+
+  lexer_next_token(&token, l, 1);
+  token.kind == nk_left_bracket ? ({
+    lexer_next_token(&token, l, 0);
+    lexer_next_token(&token, l, 0);
+    lexer_next_token(&token, l, 0);
+  })
+                                : ({});
+end:;
+  *result = ret;
+}
+
+void
+parse_struct(struct parser* p, struct lexer* l)
+{
+  struct node* struct_node;
+  struct node token;
+  struct slice* name;
+
+  node_init(p, &struct_node, nk_struct);
+  node_append(p->current, struct_node, 0);
+
+  lexer_next_token(&token, l, 0);
+  token.kind != nk_ident ? print_error(&token, "expected identifier") : ({});
+
+  alloc_slice(&name, p->a, p->in + token.loc.off, token.loc.len);
+  struct_node->node_data = name;
+
+  lexer_next_token(&token, l, 0);
+  token.kind != nk_left_brace ? print_error(&token, "expected '{'") : ({});
+
+  while (1) {
+    struct node* result;
+    parse_type(&result, p, l);
+    result == 0 ? ({ goto end; }) : ({});
+    lexer_next_token(&token, l, 0);
+    token.kind == nk_right_brace ? ({ goto end; }) : ({});
+    token.kind != nk_semi ? print_error(&token, "expected '}' or ';'") : ({});
+  }
+end:;
+}
+
+void
+parse_void(struct parser* p, struct lexer* l)
+{
+  struct node token;
+  long counter;
+  counter = 0;
+  while (1) {
+    lexer_next_token(&token, l, 0);
+    token.kind == nk_right_brace ? ({ --counter ? ({}) : ({ goto end; }); })
+                                 : ({});
+    token.kind == nk_left_brace ? counter++ : ({ 0; });
+  }
+end:;
+  (void)p;
+}
+
+void
 parse(struct parser* p, struct lexer* l, long debug)
 {
   struct node token;
 begin:
-  lexer_next_token(&token, l);
+  lexer_next_token(&token, l, 0);
   token.kind == nk_error ? print_error(&token, "unrecognized token") : ({});
   debug&& token.kind <= nk_term ? ({
     long r;
@@ -693,7 +994,13 @@ begin:
   })
                                 : ({});
 
-  token.kind == nk_term ? ({ goto end; }) : ({ goto begin; });
+  token.kind == nk_term ? ({ goto end; }) : ({});
+  token.kind == nk_comment ? ({ goto begin; }) : ({});
+  token.kind == nk_asm ? ({ parse_asm(p, l); }) : ({});
+  token.kind == nk_enum ? ({ parse_enum(p, l); }) : ({});
+  token.kind == nk_struct ? ({ parse_struct(p, l); }) : ({});
+  token.kind == nk_void ? ({ parse_void(p, l); }) : ({});
+  goto begin;
 end:;
   (void)p;
 }
