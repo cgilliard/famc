@@ -54,6 +54,7 @@ struct type_data
   struct slice type_name;
   struct slice var_name;
   long levels;
+  long array_elems;
 };
 
 enum node_kind
@@ -162,6 +163,32 @@ syscall(long* result,
         long r4,
         long r5,
         long r6);
+
+void
+string_to_long(long* result, char* buf, long len)
+{
+  long i;
+  char c;
+
+  i = 0;
+  *result = 0;
+
+  while (i < len) {
+    c = buf[i];
+    c<*"0" || c> * "9" ? ({
+      *result = -1;
+      goto end;
+    })
+                       : ({});
+    if (*result > 0x7FFFFFFFFFFFFFFF / 10) {
+      *result = -1;
+      goto end;
+    }
+    *result = *result * 10 + (c - *"0");
+    i++;
+  }
+end:;
+}
 
 void
 cstrlen(long* ret, char* x)
@@ -757,6 +784,41 @@ end_depth:
   })
                      : ({});
 
+  n->kind == nk_type ? ({
+    struct type_data* td;
+    td = n->node_data;
+    write_str(1, " (type) [");
+
+    if (td->kind == type_kind_char)
+      write_str(1, "char ");
+    else if (td->kind == type_kind_long)
+      write_str(1, "long ");
+    else if (td->kind == type_kind_void)
+      write_str(1, "void ");
+    else if (td->kind == type_kind_struct)
+      write_str(1, "struct ");
+    else if (td->kind == type_kind_enum)
+      write_str(1, "enum ");
+
+    write(&r, 1, td->type_name.ptr, td->type_name.len);
+    if (td->type_name.len)
+      write_str(1, " ");
+
+    i = 0;
+    while (i < td->levels) {
+      write(&r, 1, "*", 1);
+      i++;
+    }
+    write(&r, 1, td->var_name.ptr, td->var_name.len);
+    if (td->array_elems) {
+      write_str(1, "[");
+      write_num(1, td->array_elems);
+      write_str(1, "]");
+    }
+    write_str(1, "]");
+  })
+                     : ({});
+
   n->kind == nk_ident ? ({
     write_str(1, " (ident) [");
     write(&r, 1, p->in + n->loc.off, n->loc.len);
@@ -895,6 +957,9 @@ parse_type(struct node** result, struct parser* p, struct lexer* l)
 
   node_init(p, &ret, nk_type);
   arena_alloc((void*)&td, p->a, sizeof(struct type_data));
+  td->levels = 0;
+  td->type_name.ptr = 0;
+  td->type_name.len = 0;
   ret->node_data = td;
 
   token.kind != nk_long&& token.kind != nk_char&& token.kind !=
@@ -902,25 +967,43 @@ parse_type(struct node** result, struct parser* p, struct lexer* l)
     ? print_error(&token, "expected one of (long, char, void, enum, struct)")
     : ({});
 
-  token.kind == nk_enum || token.kind == nk_struct
-    ? ({ lexer_next_token(&token, l, 0); })
-    : ({});
+  token.kind == nk_long ? td->kind = type_kind_long : ({ 0L; });
+  token.kind == nk_char ? td->kind = type_kind_char : ({ 0L; });
+  token.kind == nk_enum ? td->kind = type_kind_enum : ({ 0L; });
+  token.kind == nk_struct ? td->kind = type_kind_struct : ({ 0L; });
+  token.kind == nk_void ? td->kind = type_kind_void : ({ 0L; });
+
+  token.kind == nk_enum || token.kind == nk_struct ? ({
+    lexer_next_token(&token, l, 0);
+    td->type_name.ptr = p->in + token.loc.off;
+    td->type_name.len = token.loc.len;
+  })
+                                                   : ({ 0; });
 
 begin_loop:
   lexer_next_token(&token, l, 0);
-  token.kind != nk_asterisk ? ({ goto end_loop; }) : ({});
+  token.kind != nk_asterisk ? ({
+    goto end_loop;
+    0;
+  })
+                            : ({ td->levels++; });
   goto begin_loop;
 end_loop:
 
   token.kind != nk_ident ? print_error(&token, "expected identifier") : ({});
 
+  td->var_name.ptr = p->in + token.loc.off;
+  td->var_name.len = token.loc.len;
+
   lexer_next_token(&token, l, 1);
   token.kind == nk_left_bracket ? ({
     lexer_next_token(&token, l, 0);
     lexer_next_token(&token, l, 0);
+    string_to_long(&td->array_elems, p->in + token.loc.off, token.loc.len);
     lexer_next_token(&token, l, 0);
+    0;
   })
-                                : ({});
+                                : ({ td->array_elems = 0; });
 end:;
   *result = ret;
 }
@@ -948,6 +1031,7 @@ parse_struct(struct parser* p, struct lexer* l)
     struct node* result;
     parse_type(&result, p, l);
     result == 0 ? ({ goto end; }) : ({});
+    node_append(struct_node, result, 0);
     lexer_next_token(&token, l, 0);
     token.kind == nk_right_brace ? ({ goto end; }) : ({});
     token.kind != nk_semi ? print_error(&token, "expected '}' or ';'") : ({});
