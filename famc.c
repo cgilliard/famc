@@ -173,20 +173,22 @@ string_to_long(long* result, char* buf, long len)
   i = 0;
   *result = 0;
 
-  while (i < len) {
-    c = buf[i];
-    c<*"0" || c> * "9" ? ({
-      *result = -1;
-      goto end;
-    })
-                       : ({});
-    if (*result > 0x7FFFFFFFFFFFFFFF / 10) {
-      *result = -1;
-      goto end;
-    }
-    *result = *result * 10 + (c - *"0");
-    i++;
-  }
+begin:
+  i < len ? ({}) : ({ goto end; });
+  c = buf[i];
+  c<*"0" || c> * "9" ? ({
+    *result = -1;
+    goto end;
+  })
+                     : ({});
+  *result > 0x7FFFFFFFFFFFFFFF / 10 ? ({
+    *result = -1;
+    goto end;
+  })
+                                    : ({});
+  *result = *result * 10 + (c - *"0");
+  i++;
+  goto begin;
 end:;
 }
 
@@ -789,32 +791,30 @@ end_depth:
     td = n->node_data;
     write_str(1, " (type) [");
 
-    if (td->kind == type_kind_char)
-      write_str(1, "char ");
-    else if (td->kind == type_kind_long)
-      write_str(1, "long ");
-    else if (td->kind == type_kind_void)
-      write_str(1, "void ");
-    else if (td->kind == type_kind_struct)
-      write_str(1, "struct ");
-    else if (td->kind == type_kind_enum)
-      write_str(1, "enum ");
+    td->kind == type_kind_char     ? write_str(1, "char ")
+    : td->kind == type_kind_long   ? write_str(1, "long ")
+    : td->kind == type_kind_void   ? write_str(1, "void ")
+    : td->kind == type_kind_struct ? write_str(1, "struct ")
+    : td->kind == type_kind_enum   ? write_str(1, "enum ")
+                                   : write_str(1, "unknown ");
 
     write(&r, 1, td->type_name.ptr, td->type_name.len);
-    if (td->type_name.len)
-      write_str(1, " ");
+    td->type_name.len ? write_str(1, " ") : ({});
 
     i = 0;
-    while (i < td->levels) {
-      write(&r, 1, "*", 1);
-      i++;
-    }
+  begin_loop:
+    i < td->levels ? ({}) : ({ goto end_loop; });
+    write(&r, 1, "*", 1);
+    i++;
+    goto begin_loop;
+  end_loop:
     write(&r, 1, td->var_name.ptr, td->var_name.len);
-    if (td->array_elems) {
+    td->array_elems ? ({
       write_str(1, "[");
       write_num(1, td->array_elems);
       write_str(1, "]");
-    }
+    })
+                    : ({});
     write_str(1, "]");
   })
                      : ({});
@@ -1014,6 +1014,7 @@ parse_struct(struct parser* p, struct lexer* l)
   struct node* struct_node;
   struct node token;
   struct slice* name;
+  struct node* result;
 
   node_init(p, &struct_node, nk_struct);
   node_append(p->current, struct_node, 0);
@@ -1027,15 +1028,14 @@ parse_struct(struct parser* p, struct lexer* l)
   lexer_next_token(&token, l, 0);
   token.kind != nk_left_brace ? print_error(&token, "expected '{'") : ({});
 
-  while (1) {
-    struct node* result;
-    parse_type(&result, p, l);
-    result == 0 ? ({ goto end; }) : ({});
-    node_append(struct_node, result, 0);
-    lexer_next_token(&token, l, 0);
-    token.kind == nk_right_brace ? ({ goto end; }) : ({});
-    token.kind != nk_semi ? print_error(&token, "expected '}' or ';'") : ({});
-  }
+begin:
+  parse_type(&result, p, l);
+  result == 0 ? ({ goto end; }) : ({});
+  node_append(struct_node, result, 0);
+  lexer_next_token(&token, l, 0);
+  token.kind == nk_right_brace ? ({ goto end; }) : ({});
+  token.kind != nk_semi ? print_error(&token, "expected '}' or ';'") : ({});
+  goto begin;
 end:;
 }
 
@@ -1045,12 +1045,12 @@ parse_void(struct parser* p, struct lexer* l)
   struct node token;
   long counter;
   counter = 0;
-  while (1) {
-    lexer_next_token(&token, l, 0);
-    token.kind == nk_right_brace ? ({ --counter ? ({}) : ({ goto end; }); })
-                                 : ({});
-    token.kind == nk_left_brace ? counter++ : ({ 0; });
-  }
+begin:
+  lexer_next_token(&token, l, 0);
+  token.kind == nk_right_brace ? ({ --counter ? ({}) : ({ goto end; }); })
+                               : ({});
+  token.kind == nk_left_brace ? counter++ : ({ 0; });
+  goto begin;
 end:;
   (void)p;
 }
