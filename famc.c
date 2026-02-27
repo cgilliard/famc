@@ -487,22 +487,59 @@ end3:
               next->loc.len = in - (l->in + l->off);
               next->kind = nk_ident;
           })
-      : ({});
+      : (
+          {
+            ch3 = (*in - *"0") & 0xFF;
+            ch3 < 10
+              ? (
+                  {
+                    long is_hex;
+                    long is_bin;
+                    is_hex = 0;
+                    is_bin = 0;
+                    if (in + 1 != l->end && *(in + 1) == *"x" && *in == *"0") {
+                      is_hex = 1;
+                      in++;
+                    } else if (in + 1 != l->end && *(in + 1) == *"b" &&
+                               *in == *"0") {
+                      is_bin = 1;
+                      in++;
+                    }
+                  begin5:
+                    ++in == l->end ? ({ goto end5; }) : ({});
+                    ch1 = (*in - *"0") & 0xFF;
+                    is_bin&& ch1 > 1 ? ({ goto end5; }) : ({});
+                    ch1 >= 10 ? ({
+                      is_hex ? ({
+                        ch1 = (*in - *"a") & 0xFF;
+                        ch2 = (*in - *"A") & 0xFF;
+                        ch1 > 5 && ch2 > 5 ? ({ goto end5; }) : ({});
+                      })
+                             : ({ goto end5; });
+                    })
+                              : ({});
+                    goto begin5;
+                  end5:
+                    next->loc.len = (long)(in - (l->in + l->off));
+                    next->kind = nk_num_lit;
+                  })
+              : ({});
+          });
     goto end;
   })
                          : ({});
 
   next->kind == nk_comment ? ({
-    begin5:
-      ++in != l->end ? ({}) : ({ goto end5; });
-      *in == *"/" && *(in - 1) == *"*" ? ({ goto end5; }) : ({});
+    begin6:
+      ++in != l->end ? ({}) : ({ goto end6; });
+      *in == *"/" && *(in - 1) == *"*" ? ({ goto end6; }) : ({});
       *in == *"\n" ? ({
         l->col_start = (in - l->in) + 1;
         l->line++;
       })
                    : ({});
-      goto begin5;
-    end5:
+      goto begin6;
+    end6:
       in == l->end ? ({
         next->loc.len = in - (l->in + l->off);
         next->kind = nk_error;
