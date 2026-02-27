@@ -1267,28 +1267,12 @@ end:;
 }
 
 void
-parse(struct parser* p, struct lexer* l, long debug)
+parse(struct parser* p, struct lexer* l)
 {
   struct node token;
 begin:
   lexer_next_token(&token, l, 0);
   token.kind == nk_error ? print_error(&token, "unrecognized token") : ({});
-  debug&& token.kind <= nk_term ? ({
-    long r;
-    write_str(1, "token=");
-    write_num(1, token.kind);
-    write_str(1, ",offset=");
-    write_num(1, token.loc.off);
-    write_str(1, ",value='");
-    write(&r, 1, l->in + token.loc.off, token.loc.len);
-    write_str(1, "',line=");
-    write_num(1, token.loc.line + 1);
-    write_str(1, ",col=");
-    write_num(1, token.loc.col + 1);
-    write_str(1, "\n");
-  })
-                                : ({});
-
   token.kind == nk_term      ? ({ goto end; })
   : token.kind == nk_comment ? ({ goto begin; })
   : token.kind == nk_asm     ? parse_asm(p, l)
@@ -1358,7 +1342,7 @@ cmain(long argc, char** argv)
   p.current = p.root;
 
   lexer_init(&l, p.a, size, debug);
-  parse(&p, &l, debug);
+  parse(&p, &l);
   debug ? node_print(&p, p.root) : ({});
   debug ? write_str(1, "success!\n") : ({});
   exit_group(0);
