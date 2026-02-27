@@ -107,6 +107,8 @@ enum node_kind
   nk_type,
   nk_func_decl,
   nk_compound_stmt,
+  nk_label,
+  nk_expr,
   nk_term
 };
 
@@ -778,10 +780,36 @@ end_depth:
   })
                     : ({});
 
+  n->kind == nk_expr ? ({
+    write_str(1, " (expr)");
+    goto end;
+  })
+                     : ({});
+
   n->kind == nk_enum ? ({
     struct slice* s;
     s = n->node_data;
     write_str(1, " (enum) [");
+    write(&r, 1, s->ptr, s->len);
+    write_str(1, "]");
+    goto end;
+  })
+                     : ({});
+
+  n->kind == nk_label ? ({
+    struct slice* s;
+    s = n->node_data;
+    write_str(1, " (label) [");
+    write(&r, 1, s->ptr, s->len);
+    write_str(1, "]");
+    goto end;
+  })
+                      : ({});
+
+  n->kind == nk_goto ? ({
+    struct slice* s;
+    s = n->node_data;
+    write_str(1, " (goto) [");
     write(&r, 1, s->ptr, s->len);
     write_str(1, "]");
     goto end;
@@ -1058,19 +1086,126 @@ end:
 }
 
 void
+parse_primary(struct node* primary, struct parser* p, struct lexer* l)
+{
+  (void)p;
+  lexer_next_token(primary, l, 0);
+}
+
+void
+parse_expression_and_label(struct parser* p, struct lexer* l)
+{
+  struct node primary;
+  struct node token;
+  struct node* expr;
+  long level;
+
+  parse_primary(&primary, p, l);
+
+  lexer_next_token(&token, l, 0);
+  token.kind == nk_colon ? ({
+    struct node* label;
+    struct slice* name;
+    primary.kind != nk_ident ? print_error(&token, "unexpected token") : ({});
+    node_init(p, &label, nk_label);
+    alloc_slice(&name, p->a, p->in + primary.loc.off, primary.loc.len);
+    label->node_data = name;
+
+    node_append(p->current, label, 0);
+    goto end;
+  })
+                         : ({});
+  level = 0;
+begin_loop:
+  token.kind == nk_term             ? ({
+    print_error(&token, "unexecpted end of input");
+    0L;
+  })
+  : token.kind == nk_semi && !level ? ({
+      goto end_loop;
+      0L;
+    })
+  : token.kind == nk_left_brace     ? level++
+  : token.kind == nk_right_brace    ? level--
+                                    : ({ 0L; });
+  lexer_next_token(&token, l, 0);
+  goto begin_loop;
+end_loop:
+  node_init(p, &expr, nk_expr);
+  node_append(p->current, expr, 0);
+end:;
+}
+
+void
+parse_type_decl(struct parser* p, struct lexer* l)
+{
+  struct node* result;
+  struct node token;
+  parse_type(&result, p, l);
+  node_append(p->current, result, 0);
+  lexer_next_token(&token, l, 0);
+  token.kind != nk_semi ? print_error(&token, "expected ';'") : ({});
+}
+
+void
+parse_goto(struct parser* p, struct lexer* l)
+{
+  struct node token;
+  struct node* gnode;
+  struct slice* name;
+
+  lexer_next_token(&token, l, 0);
+  node_copy(p, &gnode, &token);
+  node_append(p->current, gnode, 0);
+
+  lexer_next_token(&token, l, 0);
+  token.kind != nk_ident ? print_error(&token, "expected identifier") : ({});
+
+  alloc_slice(&name, p->a, p->in + token.loc.off, token.loc.len);
+  gnode->node_data = name;
+
+  lexer_next_token(&token, l, 0);
+  token.kind != nk_semi ? print_error(&token, "expected ';'") : ({});
+  (void)p;
+}
+
+void
+parse_stmt(long* result, struct parser* p, struct lexer* l)
+{
+  struct node token;
+
+  lexer_next_token(&token, l, 1);
+  token.kind == nk_right_brace ? ({
+    *result = 0;
+    goto end;
+    0L;
+  })
+                               : ({ *result = 1; });
+  token.kind == nk_semi ? ({
+    lexer_next_token(&token, l, 0);
+    goto end;
+  })
+                        : ({});
+
+  token.kind == nk_goto ? parse_goto(p, l)
+  : token.kind == nk_long || token.kind == nk_char || token.kind == nk_void ||
+      token.kind == nk_struct || token.kind == nk_enum
+    ? parse_type_decl(p, l)
+    : parse_expression_and_label(p, l);
+end:;
+}
+
+void
 parse_compound_stmt(struct parser* p, struct lexer* l)
 {
-  long counter;
+  long result;
   struct node token;
-  counter = 1;
 begin:
-  lexer_next_token(&token, l, 0);
-  token.kind == nk_right_brace ? ({ --counter ? ({}) : ({ goto end; }); })
-                               : ({});
-  token.kind == nk_left_brace ? counter++ : ({ 0; });
+  parse_stmt(&result, p, l);
+  result == 0 ? ({ goto end; }) : ({});
   goto begin;
-end:;
-  (void)p;
+end:
+  lexer_next_token(&token, l, 0);
 }
 
 void
