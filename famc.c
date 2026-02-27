@@ -427,27 +427,34 @@ end1:
   next->kind = nk_error;
   while (in != l->end) {
     ch = *in++ & 0xFF;
-    if ((node = node->children[ch])) {
-      if (node->len) {
-        next->loc.len = node->len;
-        next->kind = node->kind;
-      }
-    } else {
-      if (next->kind) {
-        long ch1;
-        long ch2;
-        long ch3;
-        ch1 = (ch - *"a") & 0xFF;
-        ch2 = (ch - *"A") & 0xFF;
-        ch3 = (ch - *"0") & 0xFF;
+    (node = node->children[ch])
+      ? ({
+          node->len ? ({
+            next->loc.len = node->len;
+            next->kind = node->kind;
+          })
+                    : ({});
+        })
+      : ({
+          next->kind ? ({
+            long ch1;
+            long ch2;
+            long ch3;
+            ch1 = (ch - *"a") & 0xFF;
+            ch2 = (ch - *"A") & 0xFF;
+            ch3 = (ch - *"0") & 0xFF;
 
-        if (ch1 < 26 || ch2 < 26 || ch3 < 10 || ch == *"_") {
-          next->kind = nk_error;
-          next->loc.len = 1;
-        }
-      }
-      break;
-    }
+            ch1 < 26 || ch2 < 26 || ch3 < 10 || ch == *"_"
+              ? (
+                  {
+                    next->kind = nk_error;
+                    next->loc.len = 1;
+                  })
+              : ({});
+          })
+                     : ({});
+          break;
+        });
   }
 
   next->kind == nk_error ? ({
@@ -459,18 +466,20 @@ end1:
     ch1 = (*in - *"a") & 0xFF;
     ch2 = (*in - *"A") & 0xFF;
 
-    if (ch1 < 26 || ch2 < 26 || *in == *"_") {
-      while (++in != l->end) {
-        ch1 = (*in - *"a") & 0xFF;
-        ch2 = (*in - *"A") & 0xFF;
-        ch3 = (*in - *"0") & 0xFF;
-        if (!(ch1 < 26 || ch2 < 26 || ch3 < 10 || *in == *"_")) {
-          break;
-        }
-      }
-      next->loc.len = in - (l->in + l->off);
-      next->kind = nk_ident;
-    }
+    ch1 < 26 || ch2 < 26 || *in == *"_"
+      ? (
+          {
+            while (++in != l->end) {
+              ch1 = (*in - *"a") & 0xFF;
+              ch2 = (*in - *"A") & 0xFF;
+              ch3 = (*in - *"0") & 0xFF;
+              !(ch1 < 26 || ch2 < 26 || ch3 < 10 || *in == *"_") ? ({ break; })
+                                                                 : ({});
+            }
+            next->loc.len = in - (l->in + l->off);
+            next->kind = nk_ident;
+          })
+      : ({});
     goto end;
   })
                          : ({});
@@ -478,21 +487,22 @@ end1:
   next->kind == nk_comment ? ({
     begin3:
       ++in != l->end ? ({}) : ({ goto end3; });
-      if (*in == *"/" && *(in - 1) == *"*")
-        goto end3;
-      if (*in == *"\n") {
+      *in == *"/" && *(in - 1) == *"*" ? ({ goto end3; }) : ({});
+      *in == *"\n" ? ({
         l->col_start = (in - l->in) + 1;
         l->line++;
-      }
+      })
+                   : ({});
       goto begin3;
     end3:
-      if (in == l->end) {
+      in == l->end ? ({
         next->loc.len = in - (l->in + l->off);
         next->kind = nk_error;
-      } else {
-        next->loc.len = in - (l->in + l->off) + 1;
-        next->kind = nk_comment;
-      }
+      })
+                   : ({
+                       next->loc.len = in - (l->in + l->off) + 1;
+                       next->kind = nk_comment;
+                     });
   })
                            : ({});
 end:
