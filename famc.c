@@ -474,15 +474,18 @@ end3:
     ch1 < 26 || ch2 < 26 || *in == *"_"
       ? (
           {
-            while (++in != l->end) {
+            begin4:
+              ++in == l->end ? ({ goto end4; }) : ({});
               ch1 = (*in - *"a") & 0xFF;
               ch2 = (*in - *"A") & 0xFF;
               ch3 = (*in - *"0") & 0xFF;
-              !(ch1 < 26 || ch2 < 26 || ch3 < 10 || *in == *"_") ? ({ break; })
-                                                                 : ({});
-            }
-            next->loc.len = in - (l->in + l->off);
-            next->kind = nk_ident;
+              !(ch1 < 26 || ch2 < 26 || ch3 < 10 || *in == *"_")
+                ? ({ goto end4; })
+                : ({});
+              goto begin4;
+            end4:
+              next->loc.len = in - (l->in + l->off);
+              next->kind = nk_ident;
           })
       : ({});
     goto end;
