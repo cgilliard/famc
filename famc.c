@@ -40,10 +40,17 @@ enum node_kind
   nk_semi,
   nk_comma,
   nk_colon,
+  nk_dot,
   nk_asterisk,
   nk_questionmark,
   nk_ampersand,
   nk_equal,
+  nk_left_paren,
+  nk_right_paren,
+  nk_left_brace,
+  nk_right_brace,
+  nk_left_bracket,
+  nk_right_bracket,
   nk_double_equal,
   nk_gte,
   nk_sizeof,
@@ -357,6 +364,13 @@ lexer_init(struct lexer* l, struct arena* a, long size)
   lexer_register(l, a, ";", 1, nk_semi, 0);
   lexer_register(l, a, "*", 1, nk_asterisk, 0);
   lexer_register(l, a, ",", 1, nk_comma, 0);
+  lexer_register(l, a, "(", 1, nk_left_paren, 0);
+  lexer_register(l, a, ")", 1, nk_right_paren, 0);
+  lexer_register(l, a, "{", 1, nk_left_brace, 0);
+  lexer_register(l, a, "}", 1, nk_left_brace, 0);
+  lexer_register(l, a, "[", 1, nk_left_bracket, 0);
+  lexer_register(l, a, "]", 1, nk_right_bracket, 0);
+  lexer_register(l, a, ".", 1, nk_dot, 0);
   lexer_register(l, a, "==", 2, nk_double_equal, 0);
   lexer_register(l, a, ">=", 2, nk_gte, 0);
   lexer_register(l, a, "=", 1, nk_equal, 0);
@@ -371,6 +385,7 @@ lexer_next_token(struct node* next, struct lexer* l)
   char* in;
   struct token_trie* node;
   long ch;
+  long reserve_match;
   in = l->in + l->off;
 
 begin1:
@@ -427,6 +442,7 @@ end1:
   node = &l->root;
   next->loc.len = 1;
   next->kind = nk_error;
+  reserve_match = 0;
 
 begin3:
   in == l->end ? ({ goto end3; }) : ({});
@@ -436,6 +452,7 @@ begin3:
         node->len ? ({
           next->loc.len = node->len;
           next->kind = node->kind;
+          reserve_match = node->is_reserved_word;
         })
                   : ({});
       })
@@ -451,8 +468,11 @@ begin3:
           ch1 < 26 || ch2 < 26 || ch3 < 10 || ch == *"_"
             ? (
                 {
-                  next->kind = nk_error;
-                  next->loc.len = 1;
+                  reserve_match ? ({
+                    next->kind = nk_error;
+                    next->loc.len = 1;
+                  })
+                                : ({});
                 })
             : ({});
         })
