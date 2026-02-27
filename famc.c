@@ -397,26 +397,27 @@ end1:
   *in == *"\"" ? ({
     begin2:
       ++in != l->end ? ({}) : ({ goto end2; });
-      if (*in == *"\"") {
-        if (*(in - 1) != *"\\")
-          goto end2;
-        if (*(in - 2) == *"\\")
-          goto end2;
-      } else if (*in == *"\n") {
-        l->col_start = (in - l->in) + 1;
-        l->line++;
-      }
+      *in == *"\""   ? ({
+        *(in - 1) != *"\\" ? ({ goto end2; }) : ({});
+        *(in - 2) == *"\\" ? ({ goto end2; }) : ({});
+      })
+      : *in == *"\n" ? ({
+          l->col_start = (in - l->in) + 1;
+          l->line++;
+        })
+                     : ({});
 
       goto begin2;
     end2:
-      if (in != l->end) {
+      in != l->end ? ({
         in++;
         next->loc.len = in - (l->in + l->off);
         next->kind = nk_str_lit;
-      } else {
-        next->loc.len = in - (l->in + l->off);
-        next->kind = nk_error;
-      }
+      })
+                   : ({
+                       next->loc.len = in - (l->in + l->off);
+                       next->kind = nk_error;
+                     });
       goto end;
   })
                : ({});
