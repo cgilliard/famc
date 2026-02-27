@@ -47,18 +47,35 @@ enum node_kind
   nk_equal,
   nk_plus,
   nk_minus,
+  nk_bang,
+  nk_pipe,
+  nk_mod,
+  nk_div,
   nk_left_paren,
   nk_right_paren,
   nk_left_brace,
   nk_right_brace,
   nk_left_bracket,
   nk_right_bracket,
+  nk_arrow,
+  nk_double_pipe,
+  nk_double_ampersand,
   nk_double_equal,
   nk_double_plus,
   nk_double_minus,
+  nk_ne,
   nk_gte,
+  nk_gt,
+  nk_lte,
+  nk_lt,
+  nk_asm,
+  nk_char,
+  nk_enum,
+  nk_goto,
+  nk_long,
   nk_sizeof,
   nk_struct,
+  nk_void,
   nk_ident,
   nk_str_lit,
   nk_num_lit,
@@ -383,14 +400,32 @@ lexer_init(struct lexer* l, struct arena* a, long size)
   lexer_register(l, a, ".", 1, nk_dot, 0);
   lexer_register(l, a, "++", 2, nk_double_plus, 0);
   lexer_register(l, a, "+", 1, nk_plus, 0);
+  lexer_register(l, a, "!=", 2, nk_ne, 0);
+  lexer_register(l, a, "!", 1, nk_bang, 0);
+  lexer_register(l, a, "||", 2, nk_double_pipe, 0);
+  lexer_register(l, a, "|", 1, nk_pipe, 0);
+  lexer_register(l, a, "&&", 2, nk_double_ampersand, 0);
+  lexer_register(l, a, "&", 1, nk_ampersand, 0);
   lexer_register(l, a, "--", 2, nk_double_minus, 0);
+  lexer_register(l, a, "->", 2, nk_arrow, 0);
   lexer_register(l, a, "-", 1, nk_minus, 0);
   lexer_register(l, a, "==", 2, nk_double_equal, 0);
   lexer_register(l, a, ">=", 2, nk_gte, 0);
+  lexer_register(l, a, "<=", 2, nk_lte, 0);
+  lexer_register(l, a, "<", 1, nk_lt, 0);
+  lexer_register(l, a, ">", 1, nk_gt, 0);
   lexer_register(l, a, "=", 1, nk_equal, 0);
   lexer_register(l, a, "/*", 2, nk_comment, 0);
+  lexer_register(l, a, "/", 1, nk_div, 0);
+  lexer_register(l, a, "%", 1, nk_mod, 0);
+  lexer_register(l, a, "__asm__", 7, nk_asm, 1);
+  lexer_register(l, a, "char", 4, nk_char, 1);
+  lexer_register(l, a, "enum", 4, nk_enum, 1);
+  lexer_register(l, a, "goto", 4, nk_goto, 1);
+  lexer_register(l, a, "long", 4, nk_long, 1);
   lexer_register(l, a, "sizeof", 6, nk_sizeof, 1);
   lexer_register(l, a, "struct", 6, nk_struct, 1);
+  lexer_register(l, a, "void", 4, nk_void, 1);
 }
 
 void
