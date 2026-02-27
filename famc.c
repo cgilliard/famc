@@ -497,14 +497,19 @@ end3:
                     long is_bin;
                     is_hex = 0;
                     is_bin = 0;
-                    if (in + 1 != l->end && *(in + 1) == *"x" && *in == *"0") {
-                      is_hex = 1;
-                      in++;
-                    } else if (in + 1 != l->end && *(in + 1) == *"b" &&
-                               *in == *"0") {
-                      is_bin = 1;
-                      in++;
-                    }
+                    in + 1 != l->end && *(in + 1) == *"x" && *in == *"0"
+                      ? ({
+                          is_hex = 1;
+                          in++;
+                        })
+                      : ({
+                          in + 1 != l->end && *(in + 1) == *"b" && *in == *"0"
+                            ? ({
+                                is_bin = 1;
+                                in++;
+                              })
+                            : ({});
+                        });
                   begin5:
                     ++in == l->end ? ({ goto end5; }) : ({});
                     ch1 = (*in - *"0") & 0xFF;
