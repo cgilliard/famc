@@ -490,16 +490,16 @@ end3:
                          : ({});
 
   next->kind == nk_comment ? ({
-    begin4:
-      ++in != l->end ? ({}) : ({ goto end4; });
-      *in == *"/" && *(in - 1) == *"*" ? ({ goto end4; }) : ({});
+    begin5:
+      ++in != l->end ? ({}) : ({ goto end5; });
+      *in == *"/" && *(in - 1) == *"*" ? ({ goto end5; }) : ({});
       *in == *"\n" ? ({
         l->col_start = (in - l->in) + 1;
         l->line++;
       })
                    : ({});
-      goto begin4;
-    end4:
+      goto begin5;
+    end5:
       in == l->end ? ({
         next->loc.len = in - (l->in + l->off);
         next->kind = nk_error;
