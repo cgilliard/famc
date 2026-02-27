@@ -425,37 +425,40 @@ end1:
   node = &l->root;
   next->loc.len = 1;
   next->kind = nk_error;
-  while (in != l->end) {
-    ch = *in++ & 0xFF;
-    (node = node->children[ch])
-      ? ({
-          node->len ? ({
-            next->loc.len = node->len;
-            next->kind = node->kind;
-          })
-                    : ({});
-        })
-      : ({
-          next->kind ? ({
-            long ch1;
-            long ch2;
-            long ch3;
-            ch1 = (ch - *"a") & 0xFF;
-            ch2 = (ch - *"A") & 0xFF;
-            ch3 = (ch - *"0") & 0xFF;
 
-            ch1 < 26 || ch2 < 26 || ch3 < 10 || ch == *"_"
-              ? (
-                  {
-                    next->kind = nk_error;
-                    next->loc.len = 1;
-                  })
-              : ({});
-          })
-                     : ({});
-          break;
-        });
-  }
+begin3:
+  in == l->end ? ({ goto end3; }) : ({});
+  ch = *in++ & 0xFF;
+  (node = node->children[ch])
+    ? ({
+        node->len ? ({
+          next->loc.len = node->len;
+          next->kind = node->kind;
+        })
+                  : ({});
+      })
+    : ({
+        next->kind ? ({
+          long ch1;
+          long ch2;
+          long ch3;
+          ch1 = (ch - *"a") & 0xFF;
+          ch2 = (ch - *"A") & 0xFF;
+          ch3 = (ch - *"0") & 0xFF;
+
+          ch1 < 26 || ch2 < 26 || ch3 < 10 || ch == *"_"
+            ? (
+                {
+                  next->kind = nk_error;
+                  next->loc.len = 1;
+                })
+            : ({});
+        })
+                   : ({});
+        goto end3;
+      });
+  goto begin3;
+end3:
 
   next->kind == nk_error ? ({
     long ch1;
@@ -485,16 +488,16 @@ end1:
                          : ({});
 
   next->kind == nk_comment ? ({
-    begin3:
-      ++in != l->end ? ({}) : ({ goto end3; });
-      *in == *"/" && *(in - 1) == *"*" ? ({ goto end3; }) : ({});
+    begin4:
+      ++in != l->end ? ({}) : ({ goto end4; });
+      *in == *"/" && *(in - 1) == *"*" ? ({ goto end4; }) : ({});
       *in == *"\n" ? ({
         l->col_start = (in - l->in) + 1;
         l->line++;
       })
                    : ({});
-      goto begin3;
-    end3:
+      goto begin4;
+    end4:
       in == l->end ? ({
         next->loc.len = in - (l->in + l->off);
         next->kind = nk_error;
