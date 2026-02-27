@@ -105,6 +105,8 @@ enum node_kind
   nk_num_lit,
   nk_program,
   nk_type,
+  nk_func_decl,
+  nk_compound_stmt,
   nk_term
 };
 
@@ -770,11 +772,11 @@ end_depth:
   })
                         : ({});
 
-  n->kind == nk_program ? ({
+  n->kind == nk_asm ? ({
     write_str(1, " (asm)");
     goto end;
   })
-                        : ({});
+                    : ({});
 
   n->kind == nk_enum ? ({
     struct slice* s;
@@ -827,6 +829,9 @@ end_depth:
     goto end;
   })
                       : ({});
+
+  n->kind == nk_func_decl ? ({ write_str(1, " (func_decl)"); }) : ({});
+  n->kind == nk_compound_stmt ? write_str(1, " (compound statement)") : ({});
 
   n->kind == nk_struct ? ({
     struct slice* s;
@@ -1053,11 +1058,11 @@ end:
 }
 
 void
-parse_void(struct parser* p, struct lexer* l)
+parse_compound_stmt(struct parser* p, struct lexer* l)
 {
-  struct node token;
   long counter;
-  counter = 0;
+  struct node token;
+  counter = 1;
 begin:
   lexer_next_token(&token, l, 0);
   token.kind == nk_right_brace ? ({ --counter ? ({}) : ({ goto end; }); })
@@ -1066,6 +1071,48 @@ begin:
   goto begin;
 end:;
   (void)p;
+}
+
+void
+parse_void(struct parser* p, struct lexer* l)
+{
+  struct node* result;
+  struct node* func_decl;
+  struct node* func_name;
+  struct node* stmts;
+  struct node token;
+
+  lexer_next_token(&token, l, 0);
+  token.kind != nk_ident ? print_error(&token, "expected identifier") : ({});
+
+  node_init(p, &func_decl, nk_func_decl);
+  node_append(p->current, func_decl, 0);
+  node_copy(p, &func_name, &token);
+  node_append(func_decl, func_name, 0);
+  lexer_next_token(&token, l, 0);
+  token.kind != nk_left_paren ? print_error(&token, "expected '('") : ({});
+
+begin_params:
+  parse_type(&result, p, l);
+  result == 0 ? ({ goto end_params; }) : ({});
+  node_append(func_decl, result, 0);
+  lexer_next_token(&token, l, 0);
+  token.kind == nk_right_paren ? ({ goto end_params; }) : ({});
+  token.kind != nk_comma ? print_error(&token, "expected ')' or ','") : ({});
+  goto begin_params;
+end_params:
+
+  lexer_next_token(&token, l, 0);
+  token.kind == nk_semi ? ({ goto end; }) : ({});
+  token.kind != nk_left_brace ? print_error(&token, "expected '{' or ';'")
+                              : ({});
+
+  node_init(p, &stmts, nk_compound_stmt);
+  node_append(func_decl, stmts, 0);
+  p->current = stmts;
+  parse_compound_stmt(p, l);
+  p->current = p->current->parent->parent;
+end:;
 }
 
 void
