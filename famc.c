@@ -45,6 +45,8 @@ enum node_kind
   nk_questionmark,
   nk_ampersand,
   nk_equal,
+  nk_plus,
+  nk_minus,
   nk_left_paren,
   nk_right_paren,
   nk_left_brace,
@@ -52,6 +54,8 @@ enum node_kind
   nk_left_bracket,
   nk_right_bracket,
   nk_double_equal,
+  nk_double_plus,
+  nk_double_minus,
   nk_gte,
   nk_sizeof,
   nk_struct,
@@ -317,16 +321,20 @@ lexer_register(struct lexer* l,
 {
   long i;
   struct token_trie* cur;
+  long r;
+  long ch;
   cur = &l->root;
   i = 0;
 
 begin:
   i < len ? ({}) : ({ goto end; });
-  long ch;
   ch = s[i] & 0xFF;
   cur->children[ch] ? ({
     cur = cur->children[ch];
     cur->kind ? ({
+      write_str(2, "reg=");
+      write(&r, 2, s, len);
+      write_str(2, "\n");
       panic(
         "Compiler internal error: Must register lexer entries longer first!");
     })
@@ -346,7 +354,7 @@ begin:
     cur->len = len;
     cur->is_reserved_word = is_reserved_word;
   })
-               : ({});
+               : ({ 0; });
   i++;
   goto begin;
 end:;
@@ -364,6 +372,8 @@ lexer_init(struct lexer* l, struct arena* a, long size)
   lexer_register(l, a, ";", 1, nk_semi, 0);
   lexer_register(l, a, "*", 1, nk_asterisk, 0);
   lexer_register(l, a, ",", 1, nk_comma, 0);
+  lexer_register(l, a, ":", 1, nk_colon, 0);
+  lexer_register(l, a, "?", 1, nk_questionmark, 0);
   lexer_register(l, a, "(", 1, nk_left_paren, 0);
   lexer_register(l, a, ")", 1, nk_right_paren, 0);
   lexer_register(l, a, "{", 1, nk_left_brace, 0);
@@ -371,6 +381,10 @@ lexer_init(struct lexer* l, struct arena* a, long size)
   lexer_register(l, a, "[", 1, nk_left_bracket, 0);
   lexer_register(l, a, "]", 1, nk_right_bracket, 0);
   lexer_register(l, a, ".", 1, nk_dot, 0);
+  lexer_register(l, a, "++", 2, nk_double_plus, 0);
+  lexer_register(l, a, "+", 1, nk_plus, 0);
+  lexer_register(l, a, "--", 2, nk_double_minus, 0);
+  lexer_register(l, a, "-", 1, nk_minus, 0);
   lexer_register(l, a, "==", 2, nk_double_equal, 0);
   lexer_register(l, a, ">=", 2, nk_gte, 0);
   lexer_register(l, a, "=", 1, nk_equal, 0);
@@ -386,6 +400,9 @@ lexer_next_token(struct node* next, struct lexer* l)
   struct token_trie* node;
   long ch;
   long reserve_match;
+  long v1;
+  (void)v1;
+
   in = l->in + l->off;
 
 begin1:
@@ -417,12 +434,13 @@ end1:
       *in == *"\""   ? ({
         *(in - 1) != *"\\" ? ({ goto end2; }) : ({});
         *(in - 2) == *"\\" ? ({ goto end2; }) : ({});
+        0;
       })
       : *in == *"\n" ? ({
           l->col_start = (in - l->in) + 1;
           l->line++;
         })
-                     : ({});
+                     : ({ 0; });
 
       goto begin2;
     end2:
@@ -454,7 +472,7 @@ begin3:
           next->kind = node->kind;
           reserve_match = node->is_reserved_word;
         })
-                  : ({});
+                  : ({ 0; });
       })
     : ({
         next->kind ? ({
@@ -472,12 +490,13 @@ begin3:
                     next->kind = nk_error;
                     next->loc.len = 1;
                   })
-                                : ({});
+                                : ({ 0; });
                 })
-            : ({});
+            : ({ 0; });
         })
-                   : ({});
+                   : ({ 0; });
         goto end3;
+        0;
       });
   goto begin3;
 end3:
@@ -517,19 +536,22 @@ end3:
                     long is_bin;
                     is_hex = 0;
                     is_bin = 0;
-                    in + 1 != l->end && *(in + 1) == *"x" && *in == *"0"
-                      ? ({
-                          is_hex = 1;
-                          in++;
-                        })
-                      : ({
-                          in + 1 != l->end && *(in + 1) == *"b" && *in == *"0"
-                            ? ({
-                                is_bin = 1;
-                                in++;
-                              })
-                            : ({});
-                        });
+                    v1 =
+                      in + 1 != l->end && *(in + 1) == *"x" && *in == *"0"
+                        ? ({
+                            is_hex = 1;
+                            in++;
+                            0;
+                          })
+                        : ({
+                            in + 1 != l->end && *(in + 1) == *"b" && *in == *"0"
+                              ? ({
+                                  is_bin = 1;
+                                  in++;
+                                  0;
+                                })
+                              : ({ 0; });
+                          });
                   begin5:
                     ++in == l->end ? ({ goto end5; }) : ({});
                     ch1 = (*in - *"0") & 0xFF;
@@ -547,8 +569,9 @@ end3:
                   end5:
                     next->loc.len = (long)(in - (l->in + l->off));
                     next->kind = nk_num_lit;
+                    0;
                   })
-              : ({});
+              : ({ 0; });
           });
     goto end;
   })
@@ -562,19 +585,21 @@ end3:
         l->col_start = (in - l->in) + 1;
         l->line++;
       })
-                   : ({});
+                   : ({ 0; });
       goto begin6;
     end6:
-      in == l->end ? ({
+      v1 = in == l->end ? ({
         next->loc.len = in - (l->in + l->off);
         next->kind = nk_error;
+        0;
       })
-                   : ({
-                       next->loc.len = in - (l->in + l->off) + 1;
-                       next->kind = nk_comment;
-                     });
+                        : ({
+                            next->loc.len = in - (l->in + l->off) + 1;
+                            next->kind = nk_comment;
+                            0;
+                          });
   })
-                           : ({});
+                           : ({ 0; });
 end:
   l->off += next->loc.len;
 }
