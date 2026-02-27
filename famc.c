@@ -912,6 +912,10 @@ begin:
   token.kind != nk_comma ? print_error(&token, "expected ',' or '}'") : ({});
   goto begin;
 end:
+
+  lexer_next_token(&token, l, 0);
+  token.kind != nk_semi ? print_error(&token, "expected ';'") : ({});
+
   p->current = p->current->parent;
 }
 
@@ -939,6 +943,9 @@ begin:
   node_append(p->current, str, 0);
   goto begin;
 end:
+
+  lexer_next_token(&token, l, 0);
+  token.kind != nk_semi ? print_error(&token, "expected ';'") : ({});
 
   p->current = p->current->parent;
 }
@@ -975,6 +982,7 @@ parse_type(struct node** result, struct parser* p, struct lexer* l)
 
   token.kind == nk_enum || token.kind == nk_struct ? ({
     lexer_next_token(&token, l, 0);
+    token.kind != nk_ident ? print_error(&token, "expected identifier") : ({});
     td->type_name.ptr = p->in + token.loc.off;
     td->type_name.len = token.loc.len;
   })
@@ -999,8 +1007,11 @@ end_loop:
   token.kind == nk_left_bracket ? ({
     lexer_next_token(&token, l, 0);
     lexer_next_token(&token, l, 0);
+    token.kind != nk_num_lit ? print_error(&token, "expected numeric value")
+                             : ({});
     string_to_long(&td->array_elems, p->in + token.loc.off, token.loc.len);
     lexer_next_token(&token, l, 0);
+    token.kind != nk_right_bracket ? print_error(&token, "expected ']'") : ({});
     0;
   })
                                 : ({ td->array_elems = 0; });
@@ -1036,7 +1047,9 @@ begin:
   token.kind == nk_right_brace ? ({ goto end; }) : ({});
   token.kind != nk_semi ? print_error(&token, "expected '}' or ';'") : ({});
   goto begin;
-end:;
+end:
+  lexer_next_token(&token, l, 0);
+  token.kind != nk_semi ? print_error(&token, "expected ';'") : ({});
 }
 
 void
@@ -1078,15 +1091,16 @@ begin:
   })
                                 : ({});
 
-  token.kind == nk_term ? ({ goto end; }) : ({});
-  token.kind == nk_comment ? ({ goto begin; }) : ({});
-  token.kind == nk_asm ? ({ parse_asm(p, l); }) : ({});
-  token.kind == nk_enum ? ({ parse_enum(p, l); }) : ({});
-  token.kind == nk_struct ? ({ parse_struct(p, l); }) : ({});
-  token.kind == nk_void ? ({ parse_void(p, l); }) : ({});
+  token.kind == nk_term      ? ({ goto end; })
+  : token.kind == nk_comment ? ({ goto begin; })
+  : token.kind == nk_asm     ? parse_asm(p, l)
+  : token.kind == nk_enum    ? parse_enum(p, l)
+  : token.kind == nk_struct  ? parse_struct(p, l)
+  : token.kind == nk_void    ? parse_void(p, l)
+                             : print_error(&token, "unexpected token");
+
   goto begin;
 end:;
-  (void)p;
 }
 
 void
