@@ -313,34 +313,36 @@ lexer_register(struct lexer* l,
   cur = &l->root;
   i = 0;
 
-  while (i < len) {
-    long ch;
-    ch = s[i] & 0xFF;
-    cur->children[ch] ? ({
-      cur = cur->children[ch];
-      cur->kind ? ({
-        panic(
-          "Compiler internal error: Must register lexer entries longer first!");
-      })
-                : ({});
+begin:
+  i < len ? ({}) : ({ goto end; });
+  long ch;
+  ch = s[i] & 0xFF;
+  cur->children[ch] ? ({
+    cur = cur->children[ch];
+    cur->kind ? ({
+      panic(
+        "Compiler internal error: Must register lexer entries longer first!");
     })
-                      : ({
-                          arena_alloc((void*)&cur->children[ch],
-                                      a,
-                                      sizeof(struct token_trie));
-                          cur = cur->children[ch];
-                          cur->kind = 0;
-                          cmemset(
-                            cur->children, 0, sizeof(struct token_trie*) * 256);
-                        });
-    i == len - 1 ? ({
-      cur->kind = kind;
-      cur->len = len;
-      cur->is_reserved_word = is_reserved_word;
-    })
-                 : ({});
-    i++;
-  }
+              : ({});
+  })
+                    : ({
+                        arena_alloc((void*)&cur->children[ch],
+                                    a,
+                                    sizeof(struct token_trie));
+                        cur = cur->children[ch];
+                        cur->kind = 0;
+                        cmemset(
+                          cur->children, 0, sizeof(struct token_trie*) * 256);
+                      });
+  i == len - 1 ? ({
+    cur->kind = kind;
+    cur->len = len;
+    cur->is_reserved_word = is_reserved_word;
+  })
+               : ({});
+  i++;
+  goto begin;
+end:;
 }
 
 void
