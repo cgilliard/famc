@@ -1161,6 +1161,7 @@ parse_expression_and_label(struct parser* p, struct lexer* l)
     node_init(p, &label, nk_label);
     label->node_data = name;
     node_append(p->current, label, 0);
+    lexer_next_token(&token1, l, 0);
     goto end;
   })
                           : ({});
