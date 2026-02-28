@@ -837,18 +837,6 @@ end_depth:
   })
                     : ({});
 
-  /*
-   * enum expression_kind
-{
-ek_add,
-ek_mul,
-ek_assign,
-ek_deref,
-ek_address,
-ek_func_call
-};
-*/
-
   n->kind == nk_expr ? ({
     struct expression_data* ed;
     ed = n->node_data;
@@ -857,7 +845,7 @@ ek_func_call
 
     ed ? ed->kind == ek_add         ? write_str(1, "add")
          : ed->kind == ek_mul       ? write_str(1, "mul")
-         : ed->kind == ek_assign    ? write_str(1, "asign")
+         : ed->kind == ek_assign    ? write_str(1, "assign")
          : ed->kind == ek_deref     ? write_str(1, "deref")
          : ed->kind == ek_address   ? write_str(1, "address")
          : ed->kind == ek_func_call ? write_str(1, "func_call")
@@ -889,6 +877,13 @@ ek_func_call
     goto end;
   })
                       : ({});
+
+  n->kind == nk_num_lit ? ({
+    write_str(1, " (num literal) [");
+    write(&r, 1, p->in + n->loc.off, n->loc.len);
+    write_str(1, "]");
+  })
+                        : ({});
 
   n->kind == nk_goto ? ({
     struct slice* s;
@@ -1170,19 +1165,26 @@ end:
 }
 
 void
-parse_expression_and_label(struct node** result,
-                           struct parser* p,
-                           struct lexer* l,
-                           long min_prec)
+get_prec(long* prec, enum node_kind kind)
 {
-  struct node token1;
-  struct node token2;
-  struct node* expr;
-  long level;
 
-  lexer_next_token(&token1, l, 0);
+  kind == nk_equal ? ({ *prec = 1; }) : ({ *prec = 2; });
+}
 
-  token1.kind == nk_asterisk ? ({
+void
+parse_expression(struct node** result,
+                 struct parser* p,
+                 struct lexer* l,
+                 long min_prec)
+{
+  struct node token;
+  struct node* lhs;
+  long v1;
+  (void)v1;
+
+  lexer_next_token(&token, l, 0);
+
+  v1 = token.kind == nk_asterisk ? ({
     struct node* child;
     struct node* deref;
     struct expression_data* ed;
@@ -1190,47 +1192,45 @@ parse_expression_and_label(struct node** result,
     arena_alloc((void*)&ed, p->a, sizeof(struct expression_data));
     ed->kind = ek_deref;
     deref->node_data = ed;
-    parse_expression_and_label(&child, p, l, min_prec);
+    parse_expression(&child, p, l, 100);
     node_append(deref, child, 0);
-    *result = deref;
-    goto end;
-  })
-                             : ({});
-
-  lexer_next_token(&token2, l, 1);
-  token2.kind == nk_colon ? ({
-    struct slice* name;
-    struct node* label;
-    token1.kind != nk_ident ? print_error(&token2, "unexpected token") : ({});
-    alloc_slice(&name, p->a, p->in + token1.loc.off, token1.loc.len);
-    node_init(p, &label, nk_label);
-    label->node_data = name;
-    *result = label;
-    lexer_next_token(&token2, l, 0);
-    goto end;
-  })
-                          : ({});
-
-  lexer_next_token(&token2, l, 0);
-  level = 0;
-begin_loop:
-  token2.kind == nk_term             ? ({
-    print_error(&token2, "unexecpted end of input");
+    lhs = deref;
     0L;
   })
-  : token2.kind == nk_semi && !level ? ({
-      goto end_loop;
-      0L;
-    })
-  : token2.kind == nk_left_brace     ? level++
-  : token2.kind == nk_right_brace    ? level--
-                                     : ({ 0L; });
-  lexer_next_token(&token2, l, 0);
-  goto begin_loop;
-end_loop:
-  node_init(p, &expr, nk_expr);
-  *result = expr;
-end:;
+                                 : ({
+                                     node_copy(p, &lhs, &token);
+                                     0L;
+                                   });
+
+  while (1) {
+    struct node* rhs;
+    struct node* bin;
+    long op_prec;
+    struct expression_data* ed;
+
+    lexer_next_token(&token, l, 1);
+    token.kind == nk_term ? print_error(&token, "unexpected end of file1")
+                          : ({});
+    token.kind == nk_semi ? ({ goto end_while; }) : ({});
+    get_prec(&op_prec, token.kind);
+    if (op_prec < min_prec)
+      break;
+    lexer_next_token(&token, l, 0);
+    parse_expression(&rhs, p, l, op_prec + 1);
+    node_init(p, &bin, nk_expr);
+    arena_alloc((void*)&ed, p->a, sizeof(struct expression_data));
+    token.kind == nk_equal      ? ed->kind = ek_assign
+    : token.kind == nk_plus     ? ed->kind = ek_add
+    : token.kind == nk_asterisk ? ed->kind = ek_mul
+                                : 0L;
+    bin->node_data = ed;
+    node_append(bin, lhs, 0);
+    node_append(bin, rhs, 0);
+    lhs = bin;
+  }
+end_while:
+
+  *result = lhs;
 }
 
 void
@@ -1270,7 +1270,11 @@ parse_stmt(long* result, struct parser* p, struct lexer* l)
 {
   struct node token;
 
-  lexer_next_token(&token, l, 1);
+  while (1) {
+    lexer_next_token(&token, l, 1);
+    token.kind == nk_comment ? ({ lexer_next_token(&token, l, 0); })
+                             : ({ break; });
+  }
   token.kind == nk_right_brace ? ({
     *result = 0;
     goto end;
@@ -1289,8 +1293,28 @@ parse_stmt(long* result, struct parser* p, struct lexer* l)
     ? parse_type_decl(p, l)
     : ({
         struct node* res;
-        parse_expression_and_label(&res, p, l, 0);
+        struct node is_colon;
+        long off;
+        off = l->off;
+        lexer_next_token(&token, l, 0);
+        lexer_next_token(&is_colon, l, 0);
+        is_colon.kind == nk_colon ? ({
+          struct slice* name;
+          struct node* label;
+          token.kind != nk_ident ? print_error(&is_colon, "unexpected token")
+                                 : ({});
+          alloc_slice(&name, p->a, p->in + token.loc.off, token.loc.len);
+          node_init(p, &label, nk_label);
+          label->node_data = name;
+          node_append(p->current, label, 0);
+
+          goto end;
+        })
+                                  : ({});
+        l->off = off;
+        parse_expression(&res, p, l, 0);
         node_append(p->current, res, 0);
+        lexer_next_token(&token, l, 0);
       });
 end:;
 }
