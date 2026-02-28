@@ -1168,7 +1168,9 @@ void
 get_prec(long* prec, enum node_kind kind)
 {
 
-  kind == nk_equal ? ({ *prec = 1; }) : ({ *prec = 2; });
+  kind == nk_equal  ? ({ *prec = 1; })
+  : kind == nk_plus ? ({ *prec = 2; })
+                    : ({ *prec = 3; });
 }
 
 void
