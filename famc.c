@@ -1170,7 +1170,10 @@ end:
 }
 
 void
-parse_expression_and_label(struct parser* p, struct lexer* l)
+parse_expression_and_label(struct node** result,
+                           struct parser* p,
+                           struct lexer* l,
+                           long min_prec)
 {
   struct node token1;
   struct node token2;
@@ -1180,16 +1183,16 @@ parse_expression_and_label(struct parser* p, struct lexer* l)
   lexer_next_token(&token1, l, 0);
 
   token1.kind == nk_asterisk ? ({
+    struct node* child;
     struct node* deref;
     struct expression_data* ed;
     node_init(p, &deref, nk_expr);
     arena_alloc((void*)&ed, p->a, sizeof(struct expression_data));
     ed->kind = ek_deref;
     deref->node_data = ed;
-    node_append(p->current, deref, 0);
-    p->current = deref;
-    parse_expression_and_label(p, l);
-    p->current = p->current->parent;
+    parse_expression_and_label(&child, p, l, min_prec);
+    node_append(deref, child, 0);
+    *result = deref;
     goto end;
   })
                              : ({});
@@ -1202,8 +1205,8 @@ parse_expression_and_label(struct parser* p, struct lexer* l)
     alloc_slice(&name, p->a, p->in + token1.loc.off, token1.loc.len);
     node_init(p, &label, nk_label);
     label->node_data = name;
-    node_append(p->current, label, 0);
-    lexer_next_token(&token1, l, 0);
+    *result = label;
+    lexer_next_token(&token2, l, 0);
     goto end;
   })
                           : ({});
@@ -1226,7 +1229,7 @@ begin_loop:
   goto begin_loop;
 end_loop:
   node_init(p, &expr, nk_expr);
-  node_append(p->current, expr, 0);
+  *result = expr;
 end:;
 }
 
@@ -1284,7 +1287,11 @@ parse_stmt(long* result, struct parser* p, struct lexer* l)
   : token.kind == nk_long || token.kind == nk_char || token.kind == nk_void ||
       token.kind == nk_struct || token.kind == nk_enum
     ? parse_type_decl(p, l)
-    : parse_expression_and_label(p, l);
+    : ({
+        struct node* res;
+        parse_expression_and_label(&res, p, l, 0);
+        node_append(p->current, res, 0);
+      });
 end:;
 }
 
