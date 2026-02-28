@@ -837,8 +837,34 @@ end_depth:
   })
                     : ({});
 
+  /*
+   * enum expression_kind
+{
+ek_add,
+ek_mul,
+ek_assign,
+ek_deref,
+ek_address,
+ek_func_call
+};
+*/
+
   n->kind == nk_expr ? ({
-    write_str(1, " (expr)");
+    struct expression_data* ed;
+    ed = n->node_data;
+
+    write_str(1, " (expr) [");
+
+    ed ? ed->kind == ek_add         ? write_str(1, "add")
+         : ed->kind == ek_mul       ? write_str(1, "mul")
+         : ed->kind == ek_assign    ? write_str(1, "asign")
+         : ed->kind == ek_deref     ? write_str(1, "deref")
+         : ed->kind == ek_address   ? write_str(1, "address")
+         : ed->kind == ek_func_call ? write_str(1, "func_call")
+                                    : write_str(1, "unknown")
+       : ({});
+
+    write_str(1, "]");
     goto end;
   })
                      : ({});
@@ -1152,6 +1178,22 @@ parse_expression_and_label(struct parser* p, struct lexer* l)
   long level;
 
   lexer_next_token(&token1, l, 0);
+
+  token1.kind == nk_asterisk ? ({
+    struct node* deref;
+    struct expression_data* ed;
+    node_init(p, &deref, nk_expr);
+    arena_alloc((void*)&ed, p->a, sizeof(struct expression_data));
+    ed->kind = ek_deref;
+    deref->node_data = ed;
+    node_append(p->current, deref, 0);
+    p->current = deref;
+    parse_expression_and_label(p, l);
+    p->current = p->current->parent;
+    goto end;
+  })
+                             : ({});
+
   lexer_next_token(&token2, l, 1);
   token2.kind == nk_colon ? ({
     struct slice* name;
