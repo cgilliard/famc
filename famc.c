@@ -196,7 +196,6 @@ struct parser
   char* in;
   struct arena* a;
   struct node* root;
-  struct node* current;
 };
 
 void
@@ -972,7 +971,7 @@ begin:
 end:
   lexer_next_token(&token, l, 0);
   token.kind != nk_semi ? print_error(&token, "expected ';'") : 0;
-  node_append(p->current, struct_node, 0);
+  node_append(p->root, struct_node, 0);
 }
 
 void
@@ -1006,7 +1005,7 @@ end:
   lexer_next_token(&token, l, 0);
   token.kind != nk_semi ? print_error(&token, "expected ';'") : 0;
 
-  node_append(p->current, enum_node, 0);
+  node_append(p->root, enum_node, 0);
 }
 
 void
@@ -1032,7 +1031,7 @@ end:
 
   lexer_next_token(&token, l, 0);
   token.kind != nk_semi ? print_error(&token, "expected ';'") : 0;
-  node_append(p->current, asm_node, 0);
+  node_append(p->root, asm_node, 0);
 }
 
 void
@@ -1089,7 +1088,7 @@ end:
     node_append(func_decl, stmts, 0);
   })
                         : lexer_next_token(&token, l, 0);
-  node_append(p->current, func_decl, 0);
+  node_append(p->root, func_decl, 0);
 }
 
 void
@@ -1140,7 +1139,6 @@ cmain(long argc, char** argv)
   arena_init(&p.a, 256 * 1024 * 1024);
   node_init(&p, &p.root, nk_program);
   p.in = l.in;
-  p.current = p.root;
   lexer_init(&l, p.a, size, debug);
   parse(&p, &l);
   debug ? node_print(&p, p.root) : 0;
