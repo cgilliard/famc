@@ -854,11 +854,7 @@ end_depth:
                      : ({});
 
   n->kind == nk_label ? ({
-    struct slice* s;
-    s = n->node_data;
-    write_str(1, " (label) [");
-    write(&r, 1, s->ptr, s->len);
-    write_str(1, "]");
+    write_str(1, " (label)");
     goto end;
   })
                       : ({});
@@ -1143,16 +1139,17 @@ end:
 }
 
 void
-parse_primary(struct node* primary, struct parser* p, struct lexer* l)
+parse_primary(struct node** primary, struct parser* p, struct lexer* l)
 {
-  (void)p;
-  lexer_next_token(primary, l, 0);
+  arena_alloc((void*)primary, p->a, sizeof(struct node));
+  cmemset(*primary, 0, sizeof(struct node));
+  lexer_next_token(*primary, l, 0);
 }
 
 void
 parse_expression_and_label(struct parser* p, struct lexer* l)
 {
-  struct node primary;
+  struct node* primary;
   struct node token;
   struct node* expr;
   long level;
@@ -1162,12 +1159,10 @@ parse_expression_and_label(struct parser* p, struct lexer* l)
   lexer_next_token(&token, l, 0);
   token.kind == nk_colon ? ({
     struct node* label;
-    struct slice* name;
-    primary.kind != nk_ident ? print_error(&token, "unexpected token") : ({});
+    (*primary).kind != nk_ident ? print_error(&token, "unexpected token")
+                                : ({});
     node_init(p, &label, nk_label);
-    alloc_slice(&name, p->a, p->in + primary.loc.off, primary.loc.len);
-    label->node_data = name;
-
+    node_append(label, primary, 0);
     node_append(p->current, label, 0);
     goto end;
   })
