@@ -854,7 +854,12 @@ end_depth:
                      : ({});
 
   n->kind == nk_label ? ({
-    write_str(1, " (label)");
+    struct slice* s;
+    s = n->node_data;
+    write_str(1, " (label) [");
+    write(&r, 1, s->ptr, s->len);
+    write_str(1, "]");
+
     goto end;
   })
                       : ({});
@@ -1139,48 +1144,42 @@ end:
 }
 
 void
-parse_primary(struct node** primary, struct parser* p, struct lexer* l)
-{
-  arena_alloc((void*)primary, p->a, sizeof(struct node));
-  cmemset(*primary, 0, sizeof(struct node));
-  lexer_next_token(*primary, l, 0);
-}
-
-void
 parse_expression_and_label(struct parser* p, struct lexer* l)
 {
-  struct node* primary;
-  struct node token;
+  struct node token1;
+  struct node token2;
   struct node* expr;
   long level;
 
-  parse_primary(&primary, p, l);
-
-  lexer_next_token(&token, l, 0);
-  token.kind == nk_colon ? ({
+  lexer_next_token(&token1, l, 0);
+  lexer_next_token(&token2, l, 1);
+  token2.kind == nk_colon ? ({
+    struct slice* name;
     struct node* label;
-    (*primary).kind != nk_ident ? print_error(&token, "unexpected token")
-                                : ({});
+    token1.kind != nk_ident ? print_error(&token2, "unexpected token") : ({});
+    alloc_slice(&name, p->a, p->in + token1.loc.off, token1.loc.len);
     node_init(p, &label, nk_label);
-    node_append(label, primary, 0);
+    label->node_data = name;
     node_append(p->current, label, 0);
     goto end;
   })
-                         : ({});
+                          : ({});
+
+  lexer_next_token(&token2, l, 0);
   level = 0;
 begin_loop:
-  token.kind == nk_term             ? ({
-    print_error(&token, "unexecpted end of input");
+  token2.kind == nk_term             ? ({
+    print_error(&token2, "unexecpted end of input");
     0L;
   })
-  : token.kind == nk_semi && !level ? ({
+  : token2.kind == nk_semi && !level ? ({
       goto end_loop;
       0L;
     })
-  : token.kind == nk_left_brace     ? level++
-  : token.kind == nk_right_brace    ? level--
-                                    : ({ 0L; });
-  lexer_next_token(&token, l, 0);
+  : token2.kind == nk_left_brace     ? level++
+  : token2.kind == nk_right_brace    ? level--
+                                     : ({ 0L; });
+  lexer_next_token(&token2, l, 0);
   goto begin_loop;
 end_loop:
   node_init(p, &expr, nk_expr);
