@@ -893,7 +893,6 @@ parse_type(struct node** result, struct parser* p, struct lexer* l)
   ret = 0;
 
   lexer_next_token(&token, l, 0);
-  write_num(2, token.kind);
   token.kind == nk_right_brace || token.kind == nk_right_paren ? ({ goto end; })
                                                                : 0;
 
@@ -1089,7 +1088,7 @@ end:
     parse_compound_stmt(&stmts, p, l);
     node_append(func_decl, stmts, 0);
   })
-                        : 0;
+                        : lexer_next_token(&token, l, 0);
   node_append(p->current, func_decl, 0);
 }
 
@@ -1106,7 +1105,7 @@ begin:
   : token.kind == nk_asm     ? parse_asm(p, l)
   : token.kind == nk_struct  ? parse_struct(p, l)
   : token.kind == nk_void    ? parse_void(p, l)
-                             : 0;
+                             : print_error(&token, "unexpected token");
   goto begin;
 end:;
 }
