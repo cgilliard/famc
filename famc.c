@@ -1205,6 +1205,21 @@ parse_expression(struct node** result,
   })
                             : ({});
 
+  token.kind == nk_ampersand ? ({
+    struct node* child;
+    struct node* address;
+    struct expression_data* ed;
+    node_init(p, &address, nk_expr);
+    arena_alloc((void*)&ed, p->a, sizeof(struct expression_data));
+    ed->kind = ek_address;
+    address->node_data = ed;
+    parse_expression(&child, p, l, 100);
+    node_append(address, child, 0);
+    lhs = address;
+    goto begin_while;
+  })
+                             : ({});
+
   token.kind == nk_ident ? ({
     struct node peek;
     lexer_next_token(&peek, l, 1);
