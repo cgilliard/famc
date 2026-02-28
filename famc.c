@@ -853,6 +853,12 @@ end_depth:
        : ({});
 
     write_str(1, "]");
+    if (ed && ed->kind == ek_func_call) {
+      write_str(1, " (");
+      write(&r, 1, p->in + n->loc.off, n->loc.len);
+      write_str(1, ")");
+    }
+
     goto end;
   })
                      : ({});
@@ -1181,12 +1187,10 @@ parse_expression(struct node** result,
 {
   struct node token;
   struct node* lhs;
-  long v1;
-  (void)v1;
 
   lexer_next_token(&token, l, 0);
 
-  v1 = token.kind == nk_asterisk ? ({
+  token.kind == nk_asterisk ? ({
     struct node* child;
     struct node* deref;
     struct expression_data* ed;
@@ -1197,13 +1201,45 @@ parse_expression(struct node** result,
     parse_expression(&child, p, l, 100);
     node_append(deref, child, 0);
     lhs = deref;
-    0L;
+    goto begin_while;
   })
-                                 : ({
-                                     node_copy(p, &lhs, &token);
-                                     0L;
-                                   });
+                            : ({});
 
+  token.kind == nk_ident ? ({
+    struct node peek;
+    lexer_next_token(&peek, l, 1);
+    peek.kind == nk_left_paren ? ({
+      struct node* fn;
+      struct node* param;
+      struct expression_data* ed;
+
+      lexer_next_token(&peek, l, 0);
+
+      node_init(p, &fn, nk_expr);
+      copy_location(&fn->loc, &token.loc);
+
+      arena_alloc((void*)&ed, p->a, sizeof(struct expression_data));
+      ed->kind = ek_func_call;
+      fn->node_data = ed;
+
+      lexer_next_token(&peek, l, 1);
+      if (peek.kind != nk_right_paren)
+        while (1) {
+          parse_expression(&param, p, l, 0);
+          node_append(fn, param, 0);
+          lexer_next_token(&token, l, 0);
+          token.kind == nk_right_paren ? ({ break; }) : ({});
+        }
+
+      lhs = fn;
+      goto begin_while;
+    })
+                               : ({});
+  })
+                         : ({});
+
+  node_copy(p, &lhs, &token);
+begin_while:
   while (1) {
     struct node* rhs;
     struct node* bin;
@@ -1213,7 +1249,10 @@ parse_expression(struct node** result,
     lexer_next_token(&token, l, 1);
     token.kind == nk_term ? print_error(&token, "unexpected end of file1")
                           : ({});
-    token.kind == nk_semi ? ({ goto end_while; }) : ({});
+    token.kind == nk_semi || token.kind == nk_right_paren ||
+        token.kind == nk_comma
+      ? ({ goto end_while; })
+      : ({});
     get_prec(&op_prec, token.kind);
     if (op_prec < min_prec)
       break;
