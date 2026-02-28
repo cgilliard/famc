@@ -14,8 +14,7 @@ CFLAGS="-O3 \
 	-Wpointer-arith \
 	-Wredundant-decls \
 	-Wstrict-prototypes \
-	-Wno-gnu-statement-expression \
-	-pedantic";
+	-Wno-gnu-statement-expression";
 
 COMMAND="${CC} ${CFLAGS} -o famc ${SRC}";
 echo ${COMMAND};
