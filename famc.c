@@ -893,6 +893,7 @@ parse_type(struct node** result, struct parser* p, struct lexer* l)
   ret = 0;
 
   lexer_next_token(&token, l, 0);
+  write_num(2, token.kind);
   token.kind == nk_right_brace || token.kind == nk_right_paren ? ({ goto end; })
                                                                : 0;
 
@@ -1077,8 +1078,9 @@ begin:
   result == 0 ? ({ goto end; }) : 0;
   node_append(func_decl, result, 0);
   lexer_next_token(&token, l, 0);
-  token.kind == nk_right_paren ? ({ goto end; }) : 0;
-  token.kind != nk_comma ? print_error(&token, "expected ')' or ','") : 0;
+  token.kind == nk_right_paren ? ({ goto end; })
+  : token.kind != nk_comma     ? print_error(&token, "expected ')' or ','")
+                               : 0;
   goto begin;
 end:
 
