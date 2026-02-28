@@ -82,6 +82,21 @@ struct type_data
   long array_elems;
 };
 
+enum expression_kind
+{
+  ek_add,
+  ek_mul,
+  ek_assign,
+  ek_deref,
+  ek_address,
+  ek_func_call
+};
+
+struct expression_data
+{
+  enum expression_kind kind;
+};
+
 enum node_kind
 {
   nk_error,
