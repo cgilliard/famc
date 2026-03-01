@@ -799,6 +799,7 @@ node_display(char** result, enum node_kind kind)
             : kind == nk_compound_stmt ? "compound statement"
             : kind == nk_goto          ? "goto"
             : kind == nk_label         ? "label"
+            : kind == nk_expr          ? "expr"
                                        : "unknown";
 }
 
@@ -1084,7 +1085,10 @@ parse_label(struct node** result, struct parser* p, struct lexer* l)
 }
 
 void
-parse_expression(struct node** result, struct parser* p, struct lexer* l)
+parse_expression(struct node** result,
+                 struct parser* p,
+                 struct lexer* l,
+                 long min_prec)
 {
   struct node token;
   long paren_count;
@@ -1113,6 +1117,7 @@ begin:
   goto begin;
 end:
   node_init(p, result, nk_expr);
+  (void)min_prec;
 }
 
 void
@@ -1131,7 +1136,7 @@ parse_expr_label(struct node** result, struct parser* p, struct lexer* l)
                                    : 1;
 
   l->off = off;
-  is_expr ? parse_expression(result, p, l) : parse_label(result, p, l);
+  is_expr ? parse_expression(result, p, l, 0) : parse_label(result, p, l);
 }
 
 void
