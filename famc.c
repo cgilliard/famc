@@ -1095,22 +1095,23 @@ parse_expression(struct node** result, struct parser* p, struct lexer* l)
   brace_count = 0;
   bracket_count = 0;
 
-  while (1) {
-    lexer_next_token(&token, l, 0);
-    token.kind == nk_semi&& paren_count == 0 && brace_count == 0 &&
-        bracket_count == 0
-      ? ({ break; })
-      : 0;
+begin:
+  lexer_next_token(&token, l, 0);
+  token.kind == nk_semi&& paren_count == 0 && brace_count == 0 &&
+      bracket_count == 0
+    ? ({ goto end; })
+    : 0;
 
-    token.kind == nk_left_paren      ? paren_count++
-    : token.kind == nk_right_paren   ? paren_count--
-    : token.kind == nk_left_brace    ? brace_count++
-    : token.kind == nk_right_brace   ? brace_count--
-    : token.kind == nk_left_bracket  ? bracket_count++
-    : token.kind == nk_right_bracket ? bracket_count--
-    : token.kind == nk_term ? print_error(&token, "unexpected end of input")
-                            : 0;
-  }
+  token.kind == nk_left_paren      ? paren_count++
+  : token.kind == nk_right_paren   ? paren_count--
+  : token.kind == nk_left_brace    ? brace_count++
+  : token.kind == nk_right_brace   ? brace_count--
+  : token.kind == nk_left_bracket  ? bracket_count++
+  : token.kind == nk_right_bracket ? bracket_count--
+  : token.kind == nk_term ? print_error(&token, "unexpected end of input")
+                          : 0;
+  goto begin;
+end:
   node_init(p, result, nk_expr);
 }
 
