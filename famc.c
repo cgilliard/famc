@@ -86,7 +86,6 @@ enum expression_kind
 enum node_kind
 {
   nk_error,
-  nk_comment,
   nk_semi,
   nk_comma,
   nk_colon,
@@ -501,7 +500,6 @@ lexer_init(struct lexer* l, struct arena* a, long size, long debug)
   lexer_register(l, a, "<", 1, nk_lt, 0);
   lexer_register(l, a, ">", 1, nk_gt, 0);
   lexer_register(l, a, "=", 1, nk_equal, 0);
-  lexer_register(l, a, "/*", 2, nk_comment, 0);
   lexer_register(l, a, "/", 1, nk_div, 0);
   lexer_register(l, a, "%", 1, nk_mod, 0);
   lexer_register(l, a, "__asm__", 7, nk_asm, 1);
@@ -532,17 +530,43 @@ begin1:
   in++;
   goto begin1;
 end1:
+
+  in == l->end ? ({
+    l->off = in - l->in;
+    next->loc.off = l->off;
+    next->loc.len = 0;
+    next->kind = nk_term;
+    next->loc.line = l->line;
+    next->loc.col = l->off - l->col_start;
+    goto end;
+  })
+               : 0;
+
+  in + 1 != l->end && *in == *"/" && *(in + 1) == *"*" ? ({
+    while (1) {
+      ++in == l->end ? ({
+        l->off = in - l->in;
+        next->loc.off = l->off;
+        next->loc.len = 0;
+        next->kind = nk_term;
+        next->loc.line = l->line;
+        next->loc.col = l->off - l->col_start;
+        goto end;
+      })
+                     : 0;
+
+      if (*in == *"/" && *(in - 1) == *"*") {
+        in++;
+        goto begin1;
+      }
+    }
+  })
+                                                       : 0;
+
   l->off = in - l->in;
   next->loc.off = l->off;
   next->loc.line = l->line;
   next->loc.col = l->off - l->col_start;
-
-  in == l->end ? ({
-    next->loc.len = 0;
-    next->kind = nk_term;
-    goto end;
-  })
-               : 0;
 
   *in == *"\"" ? ({
     begin2:
@@ -687,27 +711,6 @@ end3:
   })
                          : 0;
 
-  next->kind == nk_comment ? ({
-    begin6:
-      ++in != l->end ? 0 : ({ goto end6; });
-      *in == *"/" && *(in - 1) == *"*" ? ({ goto end6; }) : 0;
-      *in == *"\n" ? ({
-        l->col_start = (in - l->in) + 1;
-        l->line++;
-      })
-                   : 0;
-      goto begin6;
-    end6:
-      in == l->end ? ({
-        next->loc.len = in - (l->in + l->off);
-        next->kind = nk_error;
-      })
-                   : ({
-                       next->loc.len = in - (l->in + l->off) + 1;
-                       next->kind = nk_comment;
-                     });
-  })
-                           : 0;
 end:
   !peek ? l->off += next->loc.len : 0;
   l->debug ? ({
@@ -1138,14 +1141,13 @@ parse(struct parser* p, struct lexer* l)
   struct node token;
 begin:
   lexer_next_token(&token, l, 0);
-  token.kind == nk_error     ? print_error(&token, "unrecognized token")
-  : token.kind == nk_term    ? ({ goto end; })
-  : token.kind == nk_comment ? ({ goto begin; })
-  : token.kind == nk_enum    ? parse_enum(p, l)
-  : token.kind == nk_asm     ? parse_asm(p, l)
-  : token.kind == nk_struct  ? parse_struct(p, l)
-  : token.kind == nk_void    ? parse_void(p, l)
-                             : print_error(&token, "unexpected token");
+  token.kind == nk_error    ? print_error(&token, "unrecognized token")
+  : token.kind == nk_term   ? ({ goto end; })
+  : token.kind == nk_enum   ? parse_enum(p, l)
+  : token.kind == nk_asm    ? parse_asm(p, l)
+  : token.kind == nk_struct ? parse_struct(p, l)
+  : token.kind == nk_void   ? parse_void(p, l)
+                            : print_error(&token, "unexpected token");
   goto begin;
 end:;
 }
