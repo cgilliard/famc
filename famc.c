@@ -1069,7 +1069,7 @@ begin:
   token.kind == nk_left_bracket ? bracket_level++ : 0;
   token.kind == nk_right_bracket ? bracket_level-- : 0;
 
-  token.kind == nk_term ? panic("unexpected term") : 0;
+  token.kind == nk_term ? print_error(&token, "unexpected end of input") : 0;
 
   goto begin;
 end:;
