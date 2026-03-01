@@ -1170,24 +1170,22 @@ parse_fn_call_expr(struct node** result,
                    struct lexer* l)
 {
   struct node token;
-  struct node* fn;
   struct node* param;
   struct expression_data* ed;
 
   lexer_next_token(&token, l, 0);
-  node_init(p, &fn, nk_expr);
-  copy_location(&fn->loc, &name->loc);
+  node_init(p, result, nk_expr);
+  copy_location(&(*result)->loc, &name->loc);
   arena_alloc((void*)&ed, p->a, sizeof(struct expression_data));
   ed->kind = ek_func_call;
-  fn->node_data = ed;
+  (*result)->node_data = ed;
   lexer_next_token(&token, l, 1);
   token.kind != nk_right_paren ? ({
     parse_expression(&param, p, l, 0, nk_right_paren);
-    node_append(fn, param, 0);
+    node_append(*result, param, 0);
   })
                                : 0;
   lexer_next_token(&token, l, 0);
-  *result = fn;
 }
 
 void
@@ -1236,7 +1234,6 @@ begin_loop:
   token.kind == nk_term ? print_error(&token, "unexpected end of file1") : 0;
   get_prec(&op_prec, token.kind);
   token.kind == term || op_prec < min_prec ? ({ goto end_loop; }) : 0;
-  token.kind == nk_right_paren ? ({ goto end_loop; }) : 0;
   lexer_next_token(&token, l, 0);
   parse_expression(&rhs, p, l, op_prec + 1, term);
   ek = token.kind == nk_equal      ? ek_assign
