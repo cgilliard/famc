@@ -75,6 +75,8 @@ enum type_kind
 
 enum expression_kind
 {
+  ek_or,
+  ek_and,
   ek_add,
   ek_mul,
   ek_ne,
@@ -85,8 +87,10 @@ enum expression_kind
   ek_gte,
   ek_assign,
   ek_comma,
+  ek_negate,
   ek_deref,
   ek_address,
+  ek_incr_pre,
   ek_ident,
   ek_str_lit,
   ek_num_lit,
@@ -564,9 +568,8 @@ end1:
         goto end;
       })
                      : 0;
-		       l->line += *in == *"\n";
-        l->col_start = *in == *"\n" ? (in - l->in) + 1 : l->col_start;
-
+      l->line += *in == *"\n";
+      l->col_start = *in == *"\n" ? (in - l->in) + 1 : l->col_start;
 
       *in == *"/" && *(in - 1) == *"*" ? ({
         in++;
@@ -815,11 +818,15 @@ node_display(char** result, enum node_kind kind, void* node_data)
             : kind == nk_expr          ? ({
                 struct expression_data* ed = node_data;
                 ed->kind == ek_deref       ? "deref expr"
-                         : ed->kind == ek_address   ? "ident address"
+                         : ed->kind == ek_incr_pre  ? "increment (pre) expr"
+                         : ed->kind == ek_address   ? "address expr"
+                         : ed->kind == ek_negate    ? "negate expr"
                          : ed->kind == ek_ident     ? "ident expr"
                          : ed->kind == ek_num_lit   ? "num lit expr"
                          : ed->kind == ek_str_lit   ? "str lit expr"
                          : ed->kind == ek_assign    ? "assign expr"
+                         : ed->kind == ek_or        ? "or expr"
+                         : ed->kind == ek_and       ? "and expr"
                          : ed->kind == ek_ne        ? "ne expr"
                          : ed->kind == ek_eq        ? "eq expr"
                          : ed->kind == ek_lt        ? "lt expr"
@@ -934,12 +941,14 @@ get_prec(long* prec, enum node_kind kind)
 
   *prec = kind == nk_comma                           ? 1
           : kind == nk_equal                         ? 2
-          : kind == nk_double_equal || kind == nk_ne ? 3
-          : kind == nk_gt || kind == nk_lt           ? 4
-          : kind == nk_gte || kind == nk_lte         ? 4
-          : kind == nk_plus                          ? 5
-          : kind == nk_asterisk                      ? 6
-                                                     : 0;
+          : kind == nk_double_pipe                   ? 3
+          : kind == nk_double_ampersand              ? 4
+          : kind == nk_double_equal || kind == nk_ne ? 5
+          : kind == nk_gt || kind == nk_lt           ? 6
+          : kind == nk_gte || kind == nk_lte         ? 6
+          : kind == nk_plus                          ? 7
+          : kind == nk_asterisk                      ? 8
+                                                     : 99;
 }
 
 void
@@ -1223,17 +1232,27 @@ parse_expression(struct node** result,
   lhs = 0;
   lexer_next_token(&token, l, 0);
 
-  token.kind == nk_asterisk    ? ({
+  token.kind == nk_asterisk      ? ({
     parse_expression(&child, p, l, 100, term);
     make_unary(p, &lhs, ek_deref, child);
     goto begin_loop;
   })
-  : token.kind == nk_ampersand ? ({
+  : token.kind == nk_ampersand   ? ({
       parse_expression(&child, p, l, 100, term);
       make_unary(p, &lhs, ek_address, child);
       goto begin_loop;
     })
-                               : 0;
+  : token.kind == nk_double_plus ? ({
+      parse_expression(&child, p, l, 100, term);
+      make_unary(p, &lhs, ek_incr_pre, child);
+      goto begin_loop;
+    })
+  : token.kind == nk_minus       ? ({
+      parse_expression(&child, p, l, 100, term);
+      make_unary(p, &lhs, ek_negate, child);
+      goto begin_loop;
+    })
+                                 : 0;
 
   token.kind == nk_str_lit ? make_terminal_expr(p, &lhs, ek_str_lit, &token.loc)
   : token.kind == nk_num_lit
@@ -1254,17 +1273,19 @@ begin_loop:
   token.kind == term || op_prec < min_prec ? ({ goto end_loop; }) : 0;
   lexer_next_token(&token, l, 0);
   parse_expression(&rhs, p, l, op_prec + 1, term);
-  ek = token.kind == nk_equal          ? ek_assign
-       : token.kind == nk_ne           ? ek_ne
-       : token.kind == nk_double_equal ? ek_eq
-       : token.kind == nk_lt           ? ek_lt
-       : token.kind == nk_gt           ? ek_gt
-       : token.kind == nk_lte          ? ek_lte
-       : token.kind == nk_gte          ? ek_gte
-       : token.kind == nk_plus         ? ek_add
-       : token.kind == nk_asterisk     ? ek_mul
-       : token.kind == nk_comma        ? ek_comma
-                                       : ({
+  ek = token.kind == nk_equal              ? ek_assign
+       : token.kind == nk_ne               ? ek_ne
+       : token.kind == nk_double_pipe      ? ek_or
+       : token.kind == nk_double_ampersand ? ek_and
+       : token.kind == nk_double_equal     ? ek_eq
+       : token.kind == nk_lt               ? ek_lt
+       : token.kind == nk_gt               ? ek_gt
+       : token.kind == nk_lte              ? ek_lte
+       : token.kind == nk_gte              ? ek_gte
+       : token.kind == nk_plus             ? ek_add
+       : token.kind == nk_asterisk         ? ek_mul
+       : token.kind == nk_comma            ? ek_comma
+                                           : ({
                                     print_error(&token, "unexpected token");
                                     0;
                                   });
