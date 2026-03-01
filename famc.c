@@ -78,6 +78,7 @@ enum expression_kind
   ek_add,
   ek_mul,
   ek_assign,
+  ek_comma,
   ek_deref,
   ek_address,
   ek_ident,
@@ -809,6 +810,7 @@ node_display(char** result, enum node_kind kind, void* node_data)
                          : ed->kind == ek_num_lit   ? "num lit expr"
                          : ed->kind == ek_str_lit   ? "str lit expr"
                          : ed->kind == ek_assign    ? "assign expr"
+                         : ed->kind == ek_comma     ? "comma expr"
                          : ed->kind == ek_add       ? "add expr"
                          : ed->kind == ek_func_call ? "func call"
                                                     : "unknown expr";
@@ -914,9 +916,11 @@ void
 get_prec(long* prec, enum node_kind kind)
 {
 
-  kind == nk_equal  ? ({ *prec = 1; })
-  : kind == nk_plus ? ({ *prec = 2; })
-                    : ({ *prec = 3; });
+  *prec = kind == nk_comma      ? 1
+          : kind == nk_equal    ? 2
+          : kind == nk_plus     ? 3
+          : kind == nk_asterisk ? 4
+                                : 0;
 }
 
 void
@@ -1241,10 +1245,11 @@ begin_loop:
   ek = token.kind == nk_equal      ? ek_assign
        : token.kind == nk_plus     ? ek_add
        : token.kind == nk_asterisk ? ek_mul
+       : token.kind == nk_comma    ? ek_comma
                                    : ({
-                                       print_error(&token, "unexpected token");
-                                       0;
-                                     });
+                                    print_error(&token, "unexpected token");
+                                    0;
+                                  });
   make_binary(p, &lhs, ek, lhs, rhs);
   goto begin_loop;
 end_loop:
