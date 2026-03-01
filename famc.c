@@ -1035,23 +1035,64 @@ end:
 }
 
 void
-parse_compound_stmt(struct node** result, struct parser* p, struct lexer* l)
+parse_stmt(struct node** result, struct parser* p, struct lexer* l)
 {
   struct node token;
-  long level;
+  long paren_level;
+  long brace_level;
+  long bracket_level;
+
+  paren_level = 0;
+  brace_level = 0;
+  bracket_level = 0;
+  *result = 0;
+
+begin:
+  lexer_next_token(&token, l, 0);
+
+  token.kind == nk_semi&& paren_level == 0 && brace_level == 0 &&
+      bracket_level == 0
+    ? ({
+        node_init(p, result, nk_expr);
+        goto end;
+      })
+    : 0;
+  token.kind == nk_right_brace&& paren_level == 0 && brace_level == 0 &&
+      bracket_level == 0
+    ? ({ goto end; })
+    : 0;
+
+  token.kind == nk_left_paren ? paren_level++ : 0;
+  token.kind == nk_right_paren ? paren_level-- : 0;
+  token.kind == nk_left_brace ? brace_level++ : 0;
+  token.kind == nk_right_brace ? brace_level-- : 0;
+  token.kind == nk_left_bracket ? bracket_level++ : 0;
+  token.kind == nk_right_bracket ? bracket_level-- : 0;
+
+  token.kind == nk_term ? panic("unexpected term") : 0;
+
+  goto begin;
+end:
+}
+
+void
+parse_compound_stmt(struct node** result, struct parser* p, struct lexer* l)
+{
+  struct node* stmt;
+  struct node token;
+
+  node_init(p, result, nk_compound_stmt);
 
   lexer_next_token(&token, l, 0);
   token.kind != nk_left_brace ? print_error(&token, "unexpected token") : 0;
 
-  level = 1;
 begin:
-  lexer_next_token(&token, l, 0);
-  token.kind == nk_left_brace    ? level++
-  : token.kind == nk_right_brace ? ({ --level ? 0 : ({ goto end; }); })
-                                 : 0;
-  goto begin;
+  parse_stmt(&stmt, p, l);
+  stmt == 0 ? ({ goto end; }) : ({
+    node_append(*result, stmt, 0);
+    goto begin;
+  });
 end:
-  node_init(p, result, nk_compound_stmt);
 }
 
 void

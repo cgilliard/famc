@@ -5,7 +5,7 @@ if [ "$CI" = "true" ]; then
 	sudo apt install tcc
 fi
 
-CC=clang
+CC=gcc
 SRC=famc.c
 CFLAGS="-O3 \
         -nostdlib \
