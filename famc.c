@@ -543,7 +543,7 @@ end1:
                : 0;
 
   in + 1 != l->end && *in == *"/" && *(in + 1) == *"*" ? ({
-    while (1) {
+    begin_comments:
       ++in == l->end ? ({
         l->off = in - l->in;
         next->loc.off = l->off;
@@ -555,11 +555,12 @@ end1:
       })
                      : 0;
 
-      if (*in == *"/" && *(in - 1) == *"*") {
+      *in == *"/" && *(in - 1) == *"*" ? ({
         in++;
         goto begin1;
-      }
-    }
+      })
+                                       : 0;
+      goto begin_comments;
   })
                                                        : 0;
 
@@ -1053,16 +1054,14 @@ parse_stmt(struct node** result, struct parser* p, struct lexer* l)
 begin:
   lexer_next_token(&token, l, 0);
 
+  token.kind == nk_term ? print_error(&token, "unexpected end of input") : 0;
+
   token.kind == nk_semi&& paren_level == 0 && brace_level == 0 &&
       bracket_level == 0
     ? ({
         node_init(p, result, nk_expr);
         goto end;
       })
-    : 0;
-  token.kind == nk_right_brace&& paren_level == 0 && brace_level == 0 &&
-      bracket_level == 0
-    ? ({ goto end; })
     : 0;
 
   token.kind == nk_left_paren ? paren_level++ : 0;
@@ -1071,8 +1070,6 @@ begin:
   token.kind == nk_right_brace ? brace_level-- : 0;
   token.kind == nk_left_bracket ? bracket_level++ : 0;
   token.kind == nk_right_bracket ? bracket_level-- : 0;
-
-  token.kind == nk_term ? print_error(&token, "unexpected end of input") : 0;
 
   goto begin;
 end:;
@@ -1090,12 +1087,17 @@ parse_compound_stmt(struct node** result, struct parser* p, struct lexer* l)
   token.kind != nk_left_brace ? print_error(&token, "unexpected token") : 0;
 
 begin:
+  lexer_next_token(&token, l, 1);
+  token.kind == nk_term ? print_error(&token, "unexecpted end of input") : 0;
+  token.kind == nk_right_brace ? ({ goto end; }) : 0;
   parse_stmt(&stmt, p, l);
   stmt == 0 ? ({ goto end; }) : ({
     node_append(*result, stmt, 0);
     goto begin;
   });
-end:;
+end:
+  lexer_next_token(&token, l, 0);
+  token.kind != nk_right_brace ? print_error(&token, "expected '}'") : 0;
 }
 
 void
