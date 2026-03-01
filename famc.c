@@ -1072,7 +1072,7 @@ begin:
   token.kind == nk_term ? panic("unexpected term") : 0;
 
   goto begin;
-end:
+end:;
 }
 
 void
@@ -1092,7 +1092,7 @@ begin:
     node_append(*result, stmt, 0);
     goto begin;
   });
-end:
+end:;
 }
 
 void
