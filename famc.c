@@ -1115,6 +1115,25 @@ parse_expression(struct node** result, struct parser* p, struct lexer* l)
 }
 
 void
+parse_expr_label(struct node** result, struct parser* p, struct lexer* l)
+{
+  struct node token;
+  long off;
+  long is_expr;
+
+  off = l->off;
+  lexer_next_token(&token, l, 0);
+  is_expr = token.kind == nk_ident ? ({
+    lexer_next_token(&token, l, 0);
+    token.kind == nk_colon ? 0 : 1;
+  })
+                                   : 1;
+
+  l->off = off;
+  is_expr ? parse_expression(result, p, l) : parse_label(result, p, l);
+}
+
+void
 parse_stmt(struct node** result, struct parser* p, struct lexer* l)
 {
   struct node token;
@@ -1125,28 +1144,8 @@ parse_stmt(struct node** result, struct parser* p, struct lexer* l)
   : token.kind == nk_char   ? parse_decl(result, p, l)
   : token.kind == nk_void   ? parse_decl(result, p, l)
   : token.kind == nk_struct ? parse_decl(result, p, l)
-  : token.kind == nk_enum
-    ? parse_decl(result, p, l)
-    : ({
-        long off;
-        off = l->off;
-        lexer_next_token(&token, l, 0);
-        token.kind == nk_ident ? ({
-          lexer_next_token(&token, l, 0);
-          token.kind == nk_colon ? ({
-            l->off = off;
-            parse_label(result, p, l);
-          })
-                                 : ({
-                                     l->off = off;
-                                     parse_expression(result, p, l);
-                                   });
-        })
-                               : ({
-                                   l->off = off;
-                                   parse_expression(result, p, l);
-                                 });
-      });
+  : token.kind == nk_enum   ? parse_decl(result, p, l)
+                            : parse_expr_label(result, p, l);
 }
 
 void
