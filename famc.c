@@ -806,6 +806,7 @@ node_display(char** result, enum node_kind kind, void* node_data)
             : kind == nk_expr          ? ({
                 struct expression_data* ed = node_data;
                 ed->kind == ek_deref       ? "deref expr"
+                         : ed->kind == ek_address   ? "ident address"
                          : ed->kind == ek_ident     ? "ident expr"
                          : ed->kind == ek_num_lit   ? "num lit expr"
                          : ed->kind == ek_str_lit   ? "str lit expr"
@@ -1174,22 +1175,18 @@ parse_fn_call_expr(struct node** result,
   struct expression_data* ed;
 
   lexer_next_token(&token, l, 0);
-
   node_init(p, &fn, nk_expr);
   copy_location(&fn->loc, &name->loc);
-
   arena_alloc((void*)&ed, p->a, sizeof(struct expression_data));
   ed->kind = ek_func_call;
   fn->node_data = ed;
-
   lexer_next_token(&token, l, 1);
-  if (token.kind != nk_right_paren)
-    while (1) {
-      parse_expression(&param, p, l, 0, nk_comma);
-      node_append(fn, param, 0);
-      lexer_next_token(&token, l, 0);
-      token.kind == nk_right_paren ? ({ break; }) : 0;
-    }
+  token.kind != nk_right_paren ? ({
+    parse_expression(&param, p, l, 0, nk_right_paren);
+    node_append(fn, param, 0);
+  })
+                               : 0;
+  lexer_next_token(&token, l, 0);
   *result = fn;
 }
 
