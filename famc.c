@@ -1267,7 +1267,6 @@ parse_expression(struct node** result,
       goto begin_loop;
     })
   : token.kind == nk_left_brace  ? ({
-      write_str(2, "found brace!\n");
       l->off = off;
       parse_compound_stmt(&lhs, p,l);
       goto begin_loop;
