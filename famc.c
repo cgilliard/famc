@@ -1235,7 +1235,9 @@ parse_expression(struct node** result,
   struct node* rhs;
   enum expression_kind ek;
   long op_prec;
+  long off;
 
+  off = l->off;
   lhs = 0;
   lexer_next_token(&token, l, 0);
 
@@ -1262,6 +1264,12 @@ parse_expression(struct node** result,
   : token.kind == nk_left_paren  ? ({
       parse_expression(&lhs, p, l, 0, nk_right_paren);
       lexer_next_token(&token, l, 0);
+      goto begin_loop;
+    })
+  : token.kind == nk_left_brace  ? ({
+      write_str(2, "found brace!\n");
+      l->off = off;
+      parse_compound_stmt(&lhs, p,l);
       goto begin_loop;
     })
                                  : 0;
