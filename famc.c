@@ -1114,30 +1114,27 @@ end:;
 }
 
 void
-parse_expr_label(struct node** result,
-                 struct parser* p,
-                 struct lexer* l,
-                 enum node_kind term)
+parse_expr_label(struct node** result, struct parser* p, struct lexer* l)
 {
   struct node token;
   long off;
-  long is_expr;
+  long is_label;
 
   off = l->off;
   lexer_next_token(&token, l, 0);
-  is_expr = token.kind == nk_ident ? ({
+  is_label = token.kind == nk_ident ? ({
     lexer_next_token(&token, l, 0);
-    token.kind == nk_colon ? 0 : 1;
+    token.kind == nk_colon ? 1 : 0;
   })
-                                   : 1;
+                                    : 0;
 
   l->off = off;
-  is_expr ? ({
-    parse_expression(result, p, l, 0, term);
+
+  is_label ? parse_label(result, p, l) : ({
+    parse_expression(result, p, l, 0, nk_semi);
     lexer_next_token(&token, l, 0);
     token.kind != nk_semi ? print_error(&token, "expected ';'") : 0;
-  })
-          : parse_label(result, p, l);
+  });
 }
 
 void
@@ -1160,7 +1157,7 @@ begin:
   : token.kind == nk_void   ? parse_decl(result, p, l)
   : token.kind == nk_struct ? parse_decl(result, p, l)
   : token.kind == nk_enum   ? parse_decl(result, p, l)
-  : token.kind != nk_right_brace ? parse_expr_label(result, p, l, nk_semi)
+  : token.kind != nk_right_brace ? parse_expr_label(result, p, l)
                                  : 0;
 }
 
