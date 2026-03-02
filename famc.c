@@ -94,7 +94,7 @@ enum expression_kind
   ek_ident,
   ek_str_lit,
   ek_num_lit,
-  ek_func_call
+  ek_func_call,
 };
 
 enum node_kind
@@ -835,8 +835,13 @@ node_display(char** result, enum node_kind kind, void* node_data)
                          : ed->kind == ek_gte       ? "gte expr"
                          : ed->kind == ek_comma     ? "comma expr"
                          : ed->kind == ek_add       ? "add expr"
+                         : ed->kind == ek_mul       ? "mul expr"
                          : ed->kind == ek_func_call ? "func call"
-                                                    : "unknown expr";
+                                                    : ({
+                                               write_num(2, ed->kind);
+                                               write_str(2, "\n");
+                                               "unknown expr";
+                                             });
               })
                                        : "unknown";
 }
@@ -1189,6 +1194,8 @@ parse_expression(struct node** result,
                  struct lexer* l,
                  long min_prec,
                  enum node_kind term);
+void
+parse_compound_stmt(struct node** result, struct parser* p, struct lexer* l);
 
 void
 parse_fn_call_expr(struct node** result,
@@ -1250,6 +1257,11 @@ parse_expression(struct node** result,
   : token.kind == nk_minus       ? ({
       parse_expression(&child, p, l, 100, term);
       make_unary(p, &lhs, ek_negate, child);
+      goto begin_loop;
+    })
+  : token.kind == nk_left_paren  ? ({
+      parse_expression(&lhs, p, l, 0, nk_right_paren);
+      lexer_next_token(&token, l, 0);
       goto begin_loop;
     })
                                  : 0;
