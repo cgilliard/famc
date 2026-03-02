@@ -902,7 +902,7 @@ begin:
 end:
 
   lexer_next_token(&token, l, 0);
-  token.kind != nk_semi ? print_error(&token, "2expected ';'") : 0;
+  token.kind != nk_semi ? print_error(&token, "expected ';'") : 0;
   node_append(p->root, asm_node, 0);
 }
 
@@ -993,11 +993,11 @@ begin:
   result == 0 ? ({ goto end; }) : 0;
   node_append(struct_node, result, 0);
   lexer_next_token(&token, l, 0);
-  token.kind != nk_semi ? print_error(&token, "1expected '}' or ';'") : 0;
+  token.kind != nk_semi ? print_error(&token, "expected '}' or ';'") : 0;
   goto begin;
 end:
   lexer_next_token(&token, l, 0);
-  token.kind != nk_semi ? print_error(&token, "3expected ';'") : 0;
+  token.kind != nk_semi ? print_error(&token, "expected ';'") : 0;
   node_append(p->root, struct_node, 0);
 }
 
@@ -1030,7 +1030,7 @@ begin:
 end:
 
   lexer_next_token(&token, l, 0);
-  token.kind != nk_semi ? print_error(&token, "4expected ';'") : 0;
+  token.kind != nk_semi ? print_error(&token, "expected ';'") : 0;
 
   node_append(p->root, enum_node, 0);
 }
@@ -1046,7 +1046,7 @@ parse_goto(struct node** result, struct parser* p, struct lexer* l)
   (*result)->kind != nk_ident ? print_error(*result, "expected identifier") : 0;
   (*result)->kind = nk_goto;
   lexer_next_token(&token, l, 0);
-  token.kind != nk_semi ? print_error(&token, "5expected ';'") : 0;
+  token.kind != nk_semi ? print_error(&token, "expected ';'") : 0;
 }
 
 void
@@ -1055,7 +1055,7 @@ parse_decl(struct node** result, struct parser* p, struct lexer* l)
   struct node token;
   parse_type(result, p, l, 1);
   lexer_next_token(&token, l, 0);
-  token.kind != nk_semi ? print_error(&token, "6expected ';'") : 0;
+  token.kind != nk_semi ? print_error(&token, "expected ';'") : 0;
 }
 
 void
@@ -1090,7 +1090,7 @@ parse_expression(struct node** result,
   brace_count = 0;
   paren_count = 0;
 
-  node_init(p, result, nk_compound_stmt);
+  node_init(p, result, nk_expr);
 
 begin:
   lexer_next_token(&token, l, 1);
@@ -1135,7 +1135,7 @@ parse_expr_label(struct node** result,
   is_expr ? ({
     parse_expression(result, p, l, 0, term);
     lexer_next_token(&token, l, 0);
-    token.kind != nk_semi ? print_error(&token, "1expected ';'") : 0;
+    token.kind != nk_semi ? print_error(&token, "expected ';'") : 0;
   })
           : parse_label(result, p, l);
 }
@@ -1180,7 +1180,7 @@ begin:
   goto begin;
 end:
   lexer_next_token(&token, l, 0);
-  token.kind != nk_right_brace ? print_error(&token, "2expected '}'") : 0;
+  token.kind != nk_right_brace ? print_error(&token, "expected '}'") : 0;
 }
 
 void
@@ -1238,7 +1238,6 @@ begin:
                             : print_error(&token, "unexpected token");
   goto begin;
 end:;
-  (void)p;
 }
 
 void
