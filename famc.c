@@ -81,6 +81,7 @@ enum expression_kind
   ek_sub,
   ek_mul,
   ek_div,
+  ek_mod,
   ek_ne,
   ek_eq,
   ek_lt,
@@ -97,6 +98,8 @@ enum expression_kind
   ek_address,
   ek_incr_pre,
   ek_incr_post,
+  ek_decr_pre,
+  ek_decr_post,
   ek_ident,
   ek_str_lit,
   ek_num_lit,
@@ -827,6 +830,8 @@ node_display(char** result, enum node_kind kind, void* node_data)
                 ed->kind == ek_deref       ? "deref expr"
                          : ed->kind == ek_incr_pre  ? "increment (pre) expr"
                          : ed->kind == ek_incr_post ? "increment (post) expr"
+                         : ed->kind == ek_decr_pre  ? "decrement (pre) expr"
+                         : ed->kind == ek_decr_post ? "decrement (post) expr"
                          : ed->kind == ek_address   ? "address expr"
                          : ed->kind == ek_negate    ? "negate expr"
                          : ed->kind == ek_ident     ? "ident expr"
@@ -849,6 +854,7 @@ node_display(char** result, enum node_kind kind, void* node_data)
                          : ed->kind == ek_sub       ? "sub expr"
                          : ed->kind == ek_mul       ? "mul expr"
                          : ed->kind == ek_div       ? "div expr"
+                         : ed->kind == ek_mod       ? "mod expr"
                          : ed->kind == ek_func_call ? "func call"
                          : ed->kind == ek_ternary   ? "ternary expr"
                                                     : "unknown expr";
@@ -1273,49 +1279,54 @@ parse_expression(struct node** result,
   lhs = 0;
   lexer_next_token(&token, l, 0);
 
-  token.kind == nk_asterisk      ? ({
+  token.kind == nk_asterisk       ? ({
     parse_expression(&child, p, l, 100, term);
     make_unary(p, &lhs, ek_deref, child);
     goto begin_loop;
   })
-  : token.kind == nk_ampersand   ? ({
+  : token.kind == nk_ampersand    ? ({
       parse_expression(&child, p, l, 100, term);
       make_unary(p, &lhs, ek_address, child);
       goto begin_loop;
     })
-  : token.kind == nk_double_plus ? ({
+  : token.kind == nk_double_plus  ? ({
       parse_expression(&child, p, l, 100, term);
       make_unary(p, &lhs, ek_incr_pre, child);
       goto begin_loop;
     })
-  : token.kind == nk_minus       ? ({
+  : token.kind == nk_double_minus ? ({
+      parse_expression(&child, p, l, 100, term);
+      make_unary(p, &lhs, ek_decr_pre, child);
+      goto begin_loop;
+    })
+  : token.kind == nk_minus        ? ({
       parse_expression(&child, p, l, 100, term);
       make_unary(p, &lhs, ek_negate, child);
       goto begin_loop;
     })
-  : token.kind == nk_left_paren  ? ({
+  : token.kind == nk_left_paren   ? ({
       lexer_next_token(&token, l, 1);
       token.kind == nk_char || token.kind == nk_long || token.kind == nk_void ||
           token.kind == nk_struct || token.kind == nk_enum
-         ? ({
+          ? ({
             struct node* cast;
             parse_type(&cast, p, l, 0);
             lexer_next_token(&token, l, 0);
             parse_expression(&lhs, p, l, 100, term);
             make_binary(p, &lhs, ek_cast, cast, lhs);
           })
-         : ({
+          : ({
             parse_expression(&lhs, p, l, 0, nk_right_paren);
             lexer_next_token(&token, l, 0);
           });
       goto begin_loop;
     })
-  : token.kind == nk_left_brace  ? ({
+  : token.kind == nk_left_brace   ? ({
       l->off = off;
       parse_compound_stmt(&lhs, p, l);
       goto begin_loop;
     })
-                                 : 0;
+                                  : 0;
 
   token.kind == nk_str_lit ? make_terminal_expr(p, &lhs, ek_str_lit, &token.loc)
   : token.kind == nk_num_lit
@@ -1327,7 +1338,7 @@ parse_expression(struct node** result,
         ? parse_fn_call_expr(&lhs, &token, p, l)
         : make_terminal_expr(p, &lhs, ek_ident, &token.loc);
     })
-                           : print_error(&token, "unexpected token");
+                           : print_error(&token, "1unexpected token");
 
 begin_loop:
   lexer_next_token(&token, l, 1);
@@ -1336,6 +1347,10 @@ begin_loop:
     lexer_next_token(&token, l, 0);
     make_unary(p, &lhs, ek_incr_post, lhs);
   })
+  : token.kind == nk_double_minus ? ({
+      lexer_next_token(&token, l, 0);
+      make_unary(p, &lhs, ek_decr_post, lhs);
+    })
   : token.kind == nk_arrow        ? ({
       struct node* member;
       lexer_next_token(&token, l, 0);
@@ -1361,10 +1376,10 @@ end_postfix:
   token.kind == nk_questionmark ? ({
     struct node* ternary;
     lexer_next_token(&token, l, 0);
-    parse_expression(&rhs, p, l, op_prec + 1, nk_colon);
+    parse_expression(&rhs, p, l, 0, nk_colon);
     lexer_next_token(&token, l, 0);
     token.kind != nk_colon ? print_error(&token, "expected ':'") : 0;
-    parse_expression(&ternary, p, l, op_prec + 1, term);
+    parse_expression(&ternary, p, l, 0, term);
     make_ternary(p, &lhs, lhs, rhs, ternary);
     goto begin_loop;
   })
@@ -1384,11 +1399,12 @@ end_postfix:
        : token.kind == nk_minus            ? ek_sub
        : token.kind == nk_asterisk         ? ek_mul
        : token.kind == nk_div              ? ek_div
+       : token.kind == nk_mod              ? ek_mod
        : token.kind == nk_comma            ? ek_comma
        : token.kind == nk_questionmark
          ? ek_ternary
          : ({
-             print_error(&token, "unexpected token");
+             print_error(&token, "2unexpected token");
              0;
            });
   make_binary(p, &lhs, ek, lhs, rhs);
@@ -1438,7 +1454,7 @@ parse_stmt(struct node** result, struct parser* p, struct lexer* l)
   : token.kind == nk_void   ? parse_decl(result, p, l)
   : token.kind == nk_struct ? parse_decl(result, p, l)
   : token.kind == nk_enum   ? parse_decl(result, p, l)
-  : token.kind == nk_semi ? lexer_next_token(&token, l, 0)
+  : token.kind == nk_semi   ? lexer_next_token(&token, l, 0)
                             : parse_expr_label(result, p, l, nk_semi);
 }
 
@@ -1451,7 +1467,7 @@ parse_compound_stmt(struct node** result, struct parser* p, struct lexer* l)
   node_init(p, result, nk_compound_stmt);
 
   lexer_next_token(&token, l, 0);
-  token.kind != nk_left_brace ? print_error(&token, "unexpected token") : 0;
+  token.kind != nk_left_brace ? print_error(&token, "3unexpected token") : 0;
 
 begin:
   lexer_next_token(&token, l, 1);
@@ -1516,7 +1532,7 @@ begin:
   : token.kind == nk_asm    ? parse_asm(p, l)
   : token.kind == nk_struct ? parse_struct(p, l)
   : token.kind == nk_void   ? parse_void(p, l)
-                            : print_error(&token, "unexpected token");
+                            : print_error(&token, "4unexpected token");
   goto begin;
 end:;
 }
