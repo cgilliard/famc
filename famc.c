@@ -815,7 +815,7 @@ end_levels:
     write_str(fd, "]");
   })
                        : 0;
-		       write_str(fd, "]");
+  write_str(fd, "]");
 }
 
 void
@@ -1036,7 +1036,7 @@ end:
 }
 
 void
-parse_compound_stmt(struct node** result, struct parser* p, struct lexer* l)
+parse_statements(struct node** result, struct parser* p, struct lexer* l)
 {
   struct node token;
   long brace_count;
@@ -1072,11 +1072,18 @@ end:;
 }
 
 void
+parse_compound_stmt(struct parser* p, struct lexer* l, struct node* func_decl)
+{
+  struct node* stmts;
+  parse_statements(&stmts, p, l);
+  node_append(func_decl, stmts, 0);
+}
+
+void
 parse_void(struct parser* p, struct lexer* l)
 {
   struct node* result;
   struct node* func_decl;
-  struct node* stmts;
   struct node token;
 
   arena_alloc((void*)&func_decl, p->a, sizeof(struct node));
@@ -1093,17 +1100,13 @@ begin:
   result == 0 ? ({ goto end; }) : 0;
   node_append(func_decl, result, 0);
   lexer_next_token(&token, l, 0);
-  token.kind == nk_right_paren ? ({ goto end; })
-  : token.kind != nk_comma     ? print_error(&token, "expected ')' or ','")
-                               : 0;
+  token.kind == nk_right_paren ? ({ goto end; }) : 0;
+  token.kind != nk_comma ? print_error(&token, "expected ')' or ','") : 0;
   goto begin;
 end:
 
   lexer_next_token(&token, l, 1);
-  token.kind != nk_semi ? ({
-    parse_compound_stmt(&stmts, p, l);
-    node_append(func_decl, stmts, 0);
-  })
+  token.kind != nk_semi ? parse_compound_stmt(p, l, func_decl)
                         : lexer_next_token(&token, l, 0);
   node_append(p->root, func_decl, 0);
 }
@@ -1115,11 +1118,11 @@ parse(struct parser* p, struct lexer* l)
 begin:
   lexer_next_token(&token, l, 0);
   token.kind == nk_error    ? print_error(&token, "unrecognized token")
-  : token.kind == nk_term   ? ({ goto end; })
   : token.kind == nk_asm    ? parse_asm(p, l)
   : token.kind == nk_enum   ? parse_enum(p, l)
   : token.kind == nk_struct ? parse_struct(p, l)
   : token.kind == nk_void   ? parse_void(p, l)
+  : token.kind == nk_term   ? ({ goto end; })
                             : print_error(&token, "unexpected token");
   goto begin;
 end:;
