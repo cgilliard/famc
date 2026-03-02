@@ -78,7 +78,9 @@ enum expression_kind
   ek_or,
   ek_and,
   ek_add,
+  ek_sub,
   ek_mul,
+  ek_div,
   ek_ne,
   ek_eq,
   ek_lt,
@@ -844,7 +846,9 @@ node_display(char** result, enum node_kind kind, void* node_data)
                          : ed->kind == ek_subscript ? "subscript expr"
                          : ed->kind == ek_cast      ? "cast expr"
                          : ed->kind == ek_add       ? "add expr"
+                         : ed->kind == ek_sub       ? "sub expr"
                          : ed->kind == ek_mul       ? "mul expr"
+                         : ed->kind == ek_div       ? "div expr"
                          : ed->kind == ek_func_call ? "func call"
                          : ed->kind == ek_ternary   ? "ternary expr"
                                                     : "unknown expr";
@@ -1265,6 +1269,8 @@ parse_expression(struct node** result,
   long op_prec;
   long off;
 
+  write_str(2, "parse expr\n");
+
   off = l->off;
   lhs = 0;
   lexer_next_token(&token, l, 0);
@@ -1377,7 +1383,9 @@ end_postfix:
        : token.kind == nk_lte              ? ek_lte
        : token.kind == nk_gte              ? ek_gte
        : token.kind == nk_plus             ? ek_add
+       : token.kind == nk_minus            ? ek_sub
        : token.kind == nk_asterisk         ? ek_mul
+       : token.kind == nk_div              ? ek_div
        : token.kind == nk_comma            ? ek_comma
        : token.kind == nk_questionmark
          ? ek_ternary
@@ -1423,6 +1431,9 @@ parse_stmt(struct node** result, struct parser* p, struct lexer* l)
 {
   struct node token;
 
+  write_str(2, "parse stmt\n");
+  *result = 0;
+
   lexer_next_token(&token, l, 1);
   token.kind == nk_goto     ? parse_goto(result, p, l)
   : token.kind == nk_long   ? parse_decl(result, p, l)
@@ -1430,6 +1441,7 @@ parse_stmt(struct node** result, struct parser* p, struct lexer* l)
   : token.kind == nk_void   ? parse_decl(result, p, l)
   : token.kind == nk_struct ? parse_decl(result, p, l)
   : token.kind == nk_enum   ? parse_decl(result, p, l)
+  : token.kind == nk_semi ? lexer_next_token(&token, l, 0)
                             : parse_expr_label(result, p, l, nk_semi);
 }
 
