@@ -95,6 +95,7 @@ enum expression_kind
   ek_str_lit,
   ek_num_lit,
   ek_func_call,
+  ek_ternary
 };
 
 enum node_kind
@@ -837,11 +838,9 @@ node_display(char** result, enum node_kind kind, void* node_data)
                          : ed->kind == ek_add       ? "add expr"
                          : ed->kind == ek_mul       ? "mul expr"
                          : ed->kind == ek_func_call ? "func call"
-                                                    : ({
-                                               write_num(2, ed->kind);
-                                               write_str(2, "\n");
-                                               "unknown expr";
-                                             });
+                         : ed->kind == ek_ternary   ? "ternary expr"
+                                                    : "unknown expr";
+                ;
               })
                                        : "unknown";
 }
@@ -946,13 +945,14 @@ get_prec(long* prec, enum node_kind kind)
 
   *prec = kind == nk_comma                           ? 1
           : kind == nk_equal                         ? 2
-          : kind == nk_double_pipe                   ? 3
-          : kind == nk_double_ampersand              ? 4
-          : kind == nk_double_equal || kind == nk_ne ? 5
-          : kind == nk_gt || kind == nk_lt           ? 6
-          : kind == nk_gte || kind == nk_lte         ? 6
-          : kind == nk_plus                          ? 7
-          : kind == nk_asterisk                      ? 8
+	  : kind == nk_questionmark                  ? 3
+          : kind == nk_double_pipe                   ? 4
+          : kind == nk_double_ampersand              ? 5
+          : kind == nk_double_equal || kind == nk_ne ? 6
+          : kind == nk_gt || kind == nk_lt           ? 7
+          : kind == nk_gte || kind == nk_lte         ? 7
+          : kind == nk_plus                          ? 8
+          : kind == nk_asterisk                      ? 9
                                                      : 99;
 }
 
@@ -1174,6 +1174,23 @@ make_binary(struct parser* p,
 }
 
 void
+make_ternary(struct parser* p,
+             struct node** result,
+             struct node* lhs,
+             struct node* rhs,
+             struct node* ternary)
+{
+  struct expression_data* ed;
+  node_init(p, result, nk_expr);
+  arena_alloc((void*)&ed, p->a, sizeof(struct expression_data));
+  ed->kind = ek_ternary;
+  (*result)->node_data = ed;
+  node_append(*result, lhs, 0);
+  node_append(*result, rhs, 0);
+  node_append(*result, ternary, 0);
+}
+
+void
 make_terminal_expr(struct parser* p,
                    struct node** result,
                    enum expression_kind ek,
@@ -1268,7 +1285,7 @@ parse_expression(struct node** result,
     })
   : token.kind == nk_left_brace  ? ({
       l->off = off;
-      parse_compound_stmt(&lhs, p,l);
+      parse_compound_stmt(&lhs, p, l);
       goto begin_loop;
     })
                                  : 0;
@@ -1290,6 +1307,17 @@ begin_loop:
   token.kind == nk_term ? print_error(&token, "unexpected end of file1") : 0;
   get_prec(&op_prec, token.kind);
   token.kind == term || op_prec < min_prec ? ({ goto end_loop; }) : 0;
+  token.kind == nk_questionmark ? ({
+    struct node* ternary;
+    lexer_next_token(&token, l, 0);
+    parse_expression(&rhs, p, l, op_prec + 1, nk_colon);
+    lexer_next_token(&token, l, 0);
+    token.kind != nk_colon ? print_error(&token, "expected ':'") : 0;
+    parse_expression(&ternary, p, l, op_prec + 1, nk_semi);
+    make_ternary(p, &lhs, lhs, rhs, ternary);
+    goto begin_loop;
+  })
+                                : 0;
   lexer_next_token(&token, l, 0);
   parse_expression(&rhs, p, l, op_prec + 1, term);
   ek = token.kind == nk_equal              ? ek_assign
@@ -1304,10 +1332,12 @@ begin_loop:
        : token.kind == nk_plus             ? ek_add
        : token.kind == nk_asterisk         ? ek_mul
        : token.kind == nk_comma            ? ek_comma
-                                           : ({
-                                    print_error(&token, "unexpected token");
-                                    0;
-                                  });
+       : token.kind == nk_questionmark
+         ? ek_ternary
+         : ({
+             print_error(&token, "unexpected token");
+             0;
+           });
   make_binary(p, &lhs, ek, lhs, rhs);
   goto begin_loop;
 end_loop:
