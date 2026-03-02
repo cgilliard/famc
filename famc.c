@@ -45,6 +45,45 @@ enum type_kind
   tk_void
 };
 
+enum expression_kind
+{
+  ek_bitwise_or,
+  ek_bitwise_and,
+  ek_or,
+  ek_and,
+  ek_add,
+  ek_sub,
+  ek_mul,
+  ek_div,
+  ek_mod,
+  ek_ne,
+  ek_eq,
+  ek_lt,
+  ek_gt,
+  ek_lte,
+  ek_gte,
+  ek_assign,
+  ek_comma,
+  ek_arrow,
+  ek_dot,
+  ek_subscript,
+  ek_cast,
+  ek_not,
+  ek_negate,
+  ek_deref,
+  ek_address,
+  ek_sizeof,
+  ek_incr_pre,
+  ek_incr_post,
+  ek_decr_pre,
+  ek_decr_post,
+  ek_ident,
+  ek_str_lit,
+  ek_num_lit,
+  ek_func_call,
+  ek_ternary
+};
+
 enum node_kind
 {
   nk_error,
@@ -106,6 +145,11 @@ struct type_data
   struct slice var_name;
   long levels;
   long array_elems;
+};
+
+struct expression_data
+{
+  enum expression_kind kind;
 };
 
 struct token_trie
@@ -777,10 +821,50 @@ node_display(char** result, enum node_kind kind, void* node_data)
             : kind == nk_compound_stmt ? "compound statement"
             : kind == nk_goto          ? "goto"
             : kind == nk_label         ? "label"
-            : kind == nk_expr          ? "expr"
+            : kind == nk_expr          ? ({
+                struct expression_data* ed;
+                ed = node_data;
+                ed->kind == ek_deref         ? "deref expr"
+  : ed->kind == ek_incr_pre    ? "increment (pre) expr"
+                         : ed->kind == ek_incr_post   ? "increment (post) expr"
+                         : ed->kind == ek_decr_pre    ? "decrement (pre) expr"
+                         : ed->kind == ek_decr_post   ? "decrement (post) expr"
+                         : ed->kind == ek_sizeof      ? "sizeof expr"
+                         : ed->kind == ek_address     ? "address expr"
+                         : ed->kind == ek_not         ? "logical not expr"
+                         : ed->kind == ek_negate      ? "negate expr"
+                         : ed->kind == ek_ident       ? "ident expr"
+                         : ed->kind == ek_num_lit     ? "num lit expr"
+                         : ed->kind == ek_str_lit     ? "str lit expr"
+                         : ed->kind == ek_assign      ? "assign expr"
+                         : ed->kind == ek_or          ? "or expr"
+                         : ed->kind == ek_bitwise_or  ? "bitwise or expr"
+                         : ed->kind == ek_bitwise_and ? "bitwise and expr"
+                         : ed->kind == ek_and         ? "and expr"
+                         : ed->kind == ek_ne          ? "ne expr"
+                         : ed->kind == ek_eq          ? "eq expr"
+                         : ed->kind == ek_lt          ? "lt expr"
+                         : ed->kind == ek_gt          ? "gt expr"
+                         : ed->kind == ek_lte         ? "lte expr"
+                         : ed->kind == ek_gte         ? "gte expr"
+                         : ed->kind == ek_comma       ? "comma expr"
+                         : ed->kind == ek_arrow       ? "member access pointer expr"
+                         : ed->kind == ek_dot         ? "member access expr"
+                         : ed->kind == ek_subscript   ? "subscript expr"
+                         : ed->kind == ek_cast        ? "cast expr"
+                         : ed->kind == ek_add         ? "add expr"
+                         : ed->kind == ek_sub         ? "sub expr"
+                         : ed->kind == ek_mul         ? "mul expr"
+                         : ed->kind == ek_div         ? "div expr"
+                         : ed->kind == ek_mod         ? "mod expr"
+                         : ed->kind == ek_func_call   ? "func call"
+                         : ed->kind == ek_ternary     ? "ternary expr"
+                                                      : "unknown expr";
+                ;
+              })
                                        : "unknown";
-  (void)node_data;
 }
+
 
 void
 write_type(long fd, struct type_data* td)
@@ -878,6 +962,24 @@ print_error(struct node* n, char* msg)
   write_str(2, msg);
   write_str(2, "\n");
   exit_group(-1);
+}
+
+void
+get_prec(long* prec, enum node_kind kind)
+{
+  *prec = kind == nk_comma                                          ? 1
+          : kind == nk_equal                                        ? 2
+          : kind == nk_questionmark                                 ? 3
+          : kind == nk_double_pipe                                  ? 4
+          : kind == nk_double_ampersand                             ? 5
+          : kind == nk_pipe                                         ? 6
+          : kind == nk_double_equal || kind == nk_ne                ? 7
+          : kind == nk_gt || kind == nk_lt                          ? 8
+          : kind == nk_gte || kind == nk_lte                        ? 8
+          : kind == nk_plus || kind == nk_minus                     ? 9
+          : kind == nk_asterisk || kind == nk_div || kind == nk_mod ? 10
+          : kind == nk_ampersand                                    ? 11
+                                                                    : 99;
 }
 
 void
@@ -1071,6 +1173,103 @@ parse_label(struct node** result, struct parser* p, struct lexer* l)
 }
 
 void
+make_unary(struct parser* p,
+           struct node** result,
+           enum expression_kind ek,
+           struct node* child)
+{
+  struct expression_data* ed;
+  node_init(p, result, nk_expr);
+  arena_alloc((void*)&ed, p->a, sizeof(struct expression_data));
+  ed->kind = ek;
+  (*result)->node_data = ed;
+  node_append(*result, child, 0);
+}
+
+void
+make_binary(struct parser* p,
+            struct node** result,
+            enum expression_kind ek,
+            struct node* lhs,
+            struct node* rhs)
+{
+  struct expression_data* ed;
+  node_init(p, result, nk_expr);
+  arena_alloc((void*)&ed, p->a, sizeof(struct expression_data));
+  ed->kind = ek;
+  (*result)->node_data = ed;
+  node_append(*result, lhs, 0);
+  node_append(*result, rhs, 0);
+}
+
+void
+make_ternary(struct parser* p,
+             struct node** result,
+             struct node* lhs,
+             struct node* rhs,
+             struct node* ternary)
+{
+  struct expression_data* ed;
+  node_init(p, result, nk_expr);
+  arena_alloc((void*)&ed, p->a, sizeof(struct expression_data));
+  ed->kind = ek_ternary;
+  (*result)->node_data = ed;
+  node_append(*result, lhs, 0);
+  node_append(*result, rhs, 0);
+  node_append(*result, ternary, 0);
+}
+
+void
+make_terminal_expr(struct parser* p,
+                   struct node** result,
+                   enum expression_kind ek,
+                   struct source_location* loc)
+{
+  struct expression_data* ed;
+
+  node_init(p, result, nk_expr);
+  copy_location(&(*result)->loc, loc);
+  arena_alloc((void*)&ed, p->a, sizeof(struct expression_data));
+  ed->kind = ek;
+  (*result)->node_data = ed;
+}
+
+void
+parse_expression(struct node** result,
+                 struct parser* p,
+                 struct lexer* l,
+                 long min_prec,
+                 enum node_kind term);
+void
+parse_statements(struct node** result, struct parser* p, struct lexer* l);
+
+void
+parse_fn_call_expr(struct node** result,
+                   struct node* name,
+                   struct parser* p,
+                   struct lexer* l)
+{
+  struct node token;
+  struct node* param;
+  struct expression_data* ed;
+
+  lexer_next_token(&token, l, 0);
+  node_init(p, result, nk_expr);
+  copy_location(&(*result)->loc, &name->loc);
+  arena_alloc((void*)&ed, p->a, sizeof(struct expression_data));
+  ed->kind = ek_func_call;
+  (*result)->node_data = ed;
+  lexer_next_token(&token, l, 1);
+  token.kind != nk_right_paren ? ({
+    parse_expression(&param, p, l, 0, nk_right_paren);
+    node_append(*result, param, 0);
+  })
+                               : 0;
+  lexer_next_token(&token, l, 0);
+}
+
+
+void
 parse_expression(struct node** result,
                  struct parser* p,
                  struct lexer* l,
@@ -1078,39 +1277,171 @@ parse_expression(struct node** result,
                  enum node_kind term)
 {
   struct node token;
-  long brace_count;
-  long bracket_count;
-  long paren_count;
-  (void)min_prec;
-  (void)term;
+  struct node* child;
+  struct node* lhs;
+  struct node* rhs;
+  enum expression_kind ek;
+  long op_prec;
+  long off;
 
-  node_init(p, result, nk_expr);
-
-  bracket_count = 0;
-  brace_count = 0;
-  paren_count = 0;
-
-  node_init(p, result, nk_expr);
-
-begin:
-  lexer_next_token(&token, l, 1);
-  token.kind == nk_term ? print_error(&token, "unexpected end of file") : 0;
-  token.kind == nk_right_brace ? brace_count-- : 0;
-  token.kind == nk_left_brace ? brace_count++ : 0;
-
-  token.kind == nk_right_bracket ? bracket_count-- : 0;
-  token.kind == nk_left_bracket ? bracket_count++ : 0;
-
-  token.kind == nk_right_paren ? paren_count-- : 0;
-  token.kind == nk_left_paren ? paren_count++ : 0;
-
-  token.kind == nk_semi&& bracket_count == 0 && brace_count == 0 &&
-      paren_count == 0
-    ? ({ goto end; })
-    : 0;
+  off = l->off;
+  lhs = 0;
   lexer_next_token(&token, l, 0);
-  goto begin;
-end:;
+
+  token.kind == nk_asterisk       ? ({
+    parse_expression(&child, p, l, 100, term);
+    make_unary(p, &lhs, ek_deref, child);
+    goto begin_loop;
+  })
+  : token.kind == nk_ampersand    ? ({
+      parse_expression(&child, p, l, 100, term);
+      make_unary(p, &lhs, ek_address, child);
+      goto begin_loop;
+    })
+  : token.kind == nk_double_plus  ? ({
+      parse_expression(&child, p, l, 100, term);
+      make_unary(p, &lhs, ek_incr_pre, child);
+      goto begin_loop;
+    })
+  : token.kind == nk_double_minus ? ({
+      parse_expression(&child, p, l, 100, term);
+      make_unary(p, &lhs, ek_decr_pre, child);
+      goto begin_loop;
+    })
+  : token.kind == nk_minus        ? ({
+      parse_expression(&child, p, l, 100, term);
+      make_unary(p, &lhs, ek_negate, child);
+      goto begin_loop;
+    })
+  : token.kind == nk_bang         ? ({
+      parse_expression(&child, p, l, 100, term);
+      make_unary(p, &lhs, ek_not, child);
+      goto begin_loop;
+    })
+  : token.kind == nk_sizeof       ? ({
+      struct node* sz;
+      lexer_next_token(&token, l, 0);
+      parse_type(&sz, p, l, 0);
+      lexer_next_token(&token, l, 0);
+      make_unary(p, &lhs, ek_sizeof, sz);
+      goto begin_loop;
+    })
+  : token.kind == nk_left_paren   ? ({
+      lexer_next_token(&token, l, 1);
+      token.kind == nk_char || token.kind == nk_long || token.kind == nk_void ||
+          token.kind == nk_struct || token.kind == nk_enum
+          ? ({
+            struct node* cast;
+            parse_type(&cast, p, l, 0);
+            lexer_next_token(&token, l, 0);
+            parse_expression(&lhs, p, l, 100, term);
+            make_binary(p, &lhs, ek_cast, cast, lhs);
+          })
+          : ({
+            parse_expression(&lhs, p, l, 0, nk_right_paren);
+            lexer_next_token(&token, l, 0);
+          });
+      goto begin_loop;
+    })
+  : token.kind == nk_left_brace   ? ({
+      l->off = off;
+      parse_statements(&lhs, p, l);
+      goto begin_loop;
+    })
+                                  : 0;
+  token.kind == nk_str_lit ? make_terminal_expr(p, &lhs, ek_str_lit, &token.loc)
+  : token.kind == nk_num_lit
+    ? make_terminal_expr(p, &lhs, ek_num_lit, &token.loc)
+  : token.kind == nk_ident ? ({
+      struct node peek;
+      lexer_next_token(&peek, l, 1);
+      peek.kind == nk_left_paren
+        ? parse_fn_call_expr(&lhs, &token, p, l)
+        : make_terminal_expr(p, &lhs, ek_ident, &token.loc);
+    })
+                           : print_error(&token, "unexpected token");
+
+begin_loop:
+  lexer_next_token(&token, l, 1);
+
+  token.kind == nk_double_plus    ? ({
+    lexer_next_token(&token, l, 0);
+    make_unary(p, &lhs, ek_incr_post, lhs);
+  })
+  : token.kind == nk_double_minus ? ({
+      lexer_next_token(&token, l, 0);
+      make_unary(p, &lhs, ek_decr_post, lhs);
+    })
+  : token.kind == nk_arrow        ? ({
+      struct node* member;
+      lexer_next_token(&token, l, 0);
+      lexer_next_token(&token, l, 0);
+      token.kind != nk_ident ? print_error(&token, "expected identifier") : 0;
+      node_copy(p, &member, &token);
+      make_binary(p, &lhs, ek_arrow, lhs, member);
+    })
+  : token.kind == nk_dot          ? ({
+      struct node* member;
+      lexer_next_token(&token, l, 0);
+      lexer_next_token(&token, l, 0);
+      token.kind != nk_ident ? print_error(&token, "expected identifier") : 0;
+      node_copy(p, &member, &token);
+      make_binary(p, &lhs, ek_dot, lhs, member);
+    })
+  : token.kind == nk_left_bracket ? ({
+      struct node* index;
+      lexer_next_token(&token, l, 0);
+      parse_expression(&index, p, l, 0, nk_right_bracket);
+      lexer_next_token(&token, l, 0);
+      token.kind != nk_right_bracket ? print_error(&token, "expected ']'") : 0;
+      make_binary(p, &lhs, ek_subscript, lhs, index);
+    })
+                                  : ({ goto end_postfix; });
+  goto begin_loop;
+end_postfix:
+  token.kind == nk_term ? print_error(&token, "unexpected end of file") : 0;
+  get_prec(&op_prec, token.kind);
+  token.kind == term || op_prec < min_prec ? ({ goto end_loop; }) : 0;
+  token.kind == nk_questionmark ? ({
+    struct node* ternary;
+    lexer_next_token(&token, l, 0);
+    parse_expression(&rhs, p, l, 0, nk_colon);
+    lexer_next_token(&token, l, 0);
+    token.kind != nk_colon ? print_error(&token, "expected ':'") : 0;
+    parse_expression(&ternary, p, l, 0, term);
+    make_ternary(p, &lhs, lhs, rhs, ternary);
+    goto begin_loop;
+  })
+                                : 0;
+  lexer_next_token(&token, l, 0);
+  parse_expression(&rhs, p, l, op_prec + 1, term);
+  ek = token.kind == nk_equal              ? ek_assign
+       : token.kind == nk_ne               ? ek_ne
+       : token.kind == nk_double_pipe      ? ek_or
+       : token.kind == nk_pipe             ? ek_bitwise_or
+       : token.kind == nk_ampersand        ? ek_bitwise_and
+       : token.kind == nk_double_ampersand ? ek_and
+       : token.kind == nk_double_equal     ? ek_eq
+       : token.kind == nk_lt               ? ek_lt
+       : token.kind == nk_gt               ? ek_gt
+       : token.kind == nk_lte              ? ek_lte
+       : token.kind == nk_gte              ? ek_gte
+       : token.kind == nk_plus             ? ek_add
+       : token.kind == nk_minus            ? ek_sub
+       : token.kind == nk_asterisk         ? ek_mul
+       : token.kind == nk_div              ? ek_div
+       : token.kind == nk_mod              ? ek_mod
+       : token.kind == nk_comma            ? ek_comma
+       : token.kind == nk_questionmark
+         ? ek_ternary
+         : ({
+             print_error(&token, "unexpected token");
+             0;
+           });
+  make_binary(p, &lhs, ek, lhs, rhs);
+  goto begin_loop;
+end_loop:
+  *result = lhs;
 }
 
 void
