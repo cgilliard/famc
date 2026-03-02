@@ -87,6 +87,9 @@ enum expression_kind
   ek_gte,
   ek_assign,
   ek_comma,
+  ek_arrow,
+  ek_subscript,
+  ek_cast,
   ek_negate,
   ek_deref,
   ek_address,
@@ -821,7 +824,7 @@ node_display(char** result, enum node_kind kind, void* node_data)
                 struct expression_data* ed = node_data;
                 ed->kind == ek_deref       ? "deref expr"
                          : ed->kind == ek_incr_pre  ? "increment (pre) expr"
-			 : ed->kind == ek_incr_post ? "increment (post) expr"
+                         : ed->kind == ek_incr_post ? "increment (post) expr"
                          : ed->kind == ek_address   ? "address expr"
                          : ed->kind == ek_negate    ? "negate expr"
                          : ed->kind == ek_ident     ? "ident expr"
@@ -837,6 +840,9 @@ node_display(char** result, enum node_kind kind, void* node_data)
                          : ed->kind == ek_lte       ? "lte expr"
                          : ed->kind == ek_gte       ? "gte expr"
                          : ed->kind == ek_comma     ? "comma expr"
+                         : ed->kind == ek_arrow     ? "member access expr"
+                         : ed->kind == ek_subscript ? "subscript expr"
+                         : ed->kind == ek_cast      ? "cast expr"
                          : ed->kind == ek_add       ? "add expr"
                          : ed->kind == ek_mul       ? "mul expr"
                          : ed->kind == ek_func_call ? "func call"
@@ -959,7 +965,7 @@ get_prec(long* prec, enum node_kind kind)
 }
 
 void
-parse_type(struct node** result, struct parser* p, struct lexer* l)
+parse_type(struct node** result, struct parser* p, struct lexer* l, long full)
 {
   struct node* ret;
   struct type_data* td;
@@ -993,12 +999,15 @@ parse_type(struct node** result, struct parser* p, struct lexer* l)
     td->type_name.len = token.loc.len;
   })
                                                    : 0;
-
 begin_loop:
-  lexer_next_token(&token, l, 0);
+  lexer_next_token(&token, l, 1);
   token.kind != nk_asterisk ? ({ goto end_loop; }) : td->levels++;
+  lexer_next_token(&token, l, 0);
   goto begin_loop;
 end_loop:
+  full ? 0 : ({ goto end; });
+
+  lexer_next_token(&token, l, 0);
 
   token.kind != nk_ident ? print_error(&token, "expected identifier") : 0;
 
@@ -1038,7 +1047,7 @@ parse_struct(struct parser* p, struct lexer* l)
   lexer_next_token(&token, l, 0);
   token.kind != nk_left_brace ? print_error(&token, "expected '{'") : 0;
 begin:
-  parse_type(&result, p, l);
+  parse_type(&result, p, l, 1);
   result == 0 ? ({ goto end; }) : 0;
   node_append(struct_node, result, 0);
   lexer_next_token(&token, l, 0);
@@ -1128,7 +1137,7 @@ void
 parse_decl(struct node** result, struct parser* p, struct lexer* l)
 {
   struct node token;
-  parse_type(result, p, l);
+  parse_type(result, p, l, 1);
   lexer_next_token(&token, l, 0);
   token.kind != nk_semi ? print_error(&token, "expected ';'") : 0;
 }
@@ -1281,8 +1290,20 @@ parse_expression(struct node** result,
       goto begin_loop;
     })
   : token.kind == nk_left_paren  ? ({
-      parse_expression(&lhs, p, l, 0, nk_right_paren);
-      lexer_next_token(&token, l, 0);
+      lexer_next_token(&token, l, 1);
+      token.kind == nk_char || token.kind == nk_long || token.kind == nk_void ||
+          token.kind == nk_struct || token.kind == nk_enum
+         ? ({
+            struct node* cast;
+            parse_type(&cast, p, l, 0);
+            lexer_next_token(&token, l, 0);
+            parse_expression(&lhs, p, l, 100, term);
+            make_binary(p, &lhs, ek_cast, cast, lhs);
+          })
+         : ({
+            parse_expression(&lhs, p, l, 0, nk_right_paren);
+            lexer_next_token(&token, l, 0);
+          });
       goto begin_loop;
     })
   : token.kind == nk_left_brace  ? ({
@@ -1305,11 +1326,30 @@ parse_expression(struct node** result,
                            : print_error(&token, "unexpected token");
 
 begin_loop:
-    lexer_next_token(&token, l, 1);
-    token.kind != nk_double_plus ? ({ goto end_postfix; }) : 0;
+  lexer_next_token(&token, l, 1);
+
+  token.kind == nk_double_plus    ? ({
     lexer_next_token(&token, l, 0);
     make_unary(p, &lhs, ek_incr_post, lhs);
-    goto begin_loop;
+  })
+  : token.kind == nk_arrow        ? ({
+      struct node* member;
+      lexer_next_token(&token, l, 0);
+      lexer_next_token(&token, l, 0);
+      token.kind != nk_ident ? print_error(&token, "expected identifier") : 0;
+      node_copy(p, &member, &token);
+      make_binary(p, &lhs, ek_arrow, lhs, member);
+    })
+  : token.kind == nk_left_bracket ? ({
+      struct node* index;
+      lexer_next_token(&token, l, 0);
+      parse_expression(&index, p, l, 0, nk_right_bracket);
+      lexer_next_token(&token, l, 0);
+      token.kind != nk_right_bracket ? print_error(&token, "expected ']'") : 0;
+      make_binary(p, &lhs, ek_subscript, lhs, index);
+    })
+                                  : ({ goto end_postfix; });
+  goto begin_loop;
 end_postfix:
   token.kind == nk_term ? print_error(&token, "unexpected end of file") : 0;
   get_prec(&op_prec, token.kind);
@@ -1320,7 +1360,7 @@ end_postfix:
     parse_expression(&rhs, p, l, op_prec + 1, nk_colon);
     lexer_next_token(&token, l, 0);
     token.kind != nk_colon ? print_error(&token, "expected ':'") : 0;
-    parse_expression(&ternary, p, l, op_prec + 1, nk_semi);
+    parse_expression(&ternary, p, l, op_prec + 1, term);
     make_ternary(p, &lhs, lhs, rhs, ternary);
     goto begin_loop;
   })
@@ -1436,7 +1476,7 @@ parse_void(struct parser* p, struct lexer* l)
   token.kind != nk_left_paren ? print_error(&token, "expected '('") : 0;
 
 begin:
-  parse_type(&result, p, l);
+  parse_type(&result, p, l, 1);
   result == 0 ? ({ goto end; }) : 0;
   node_append(func_decl, result, 0);
   lexer_next_token(&token, l, 0);
