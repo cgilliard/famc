@@ -972,18 +972,19 @@ print_error(struct node* n, char* msg)
 void
 get_prec(long* prec, enum node_kind kind)
 {
-
-  *prec = kind == nk_comma                           ? 1
-          : kind == nk_equal                         ? 2
-          : kind == nk_questionmark                  ? 3
-          : kind == nk_double_pipe                   ? 4
-          : kind == nk_double_ampersand              ? 5
-          : kind == nk_double_equal || kind == nk_ne ? 6
-          : kind == nk_gt || kind == nk_lt           ? 7
-          : kind == nk_gte || kind == nk_lte         ? 7
-          : kind == nk_plus                          ? 8
-          : kind == nk_asterisk                      ? 9
-                                                     : 99;
+  *prec = kind == nk_comma                                          ? 1
+          : kind == nk_equal                                        ? 2
+          : kind == nk_questionmark                                 ? 3
+          : kind == nk_double_pipe                                  ? 4
+          : kind == nk_double_ampersand                             ? 5
+          : kind == nk_pipe                                         ? 6
+          : kind == nk_double_equal || kind == nk_ne                ? 7
+          : kind == nk_gt || kind == nk_lt                          ? 8
+          : kind == nk_gte || kind == nk_lte                        ? 8
+          : kind == nk_plus || kind == nk_minus                     ? 9
+          : kind == nk_asterisk || kind == nk_div || kind == nk_mod ? 10
+          : kind == nk_ampersand                                    ? 11
+                                                                    : 99;
 }
 
 void
@@ -1593,8 +1594,7 @@ cmain(long argc, char** argv)
   open(&fd, argv[argc - 1], 0, 0);
   fd < 0 ? panic("Could not open file!") : 0;
   lseek(&size, fd, 0, 2);
-  size < 0 ? panic("Could not determine file size!")
-           : 0;
+  size < 0 ? panic("Could not determine file size!") : 0;
   fmap_ro((void*)&(&l)->in, fd, size, 0);
   l.in == 0 ? panic("Could not mmap file!") : 0;
   close(&r, fd);
