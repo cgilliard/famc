@@ -1269,8 +1269,6 @@ parse_expression(struct node** result,
   long op_prec;
   long off;
 
-  write_str(2, "parse expr\n");
-
   off = l->off;
   lhs = 0;
   lexer_next_token(&token, l, 0);
@@ -1431,7 +1429,6 @@ parse_stmt(struct node** result, struct parser* p, struct lexer* l)
 {
   struct node token;
 
-  write_str(2, "parse stmt\n");
   *result = 0;
 
   lexer_next_token(&token, l, 1);
