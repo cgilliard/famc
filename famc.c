@@ -1305,12 +1305,12 @@ parse_expression(struct node** result,
                            : print_error(&token, "unexpected token");
 
 begin_loop:
-  while (1) {
     lexer_next_token(&token, l, 1);
-    token.kind != nk_double_plus ? ({ break; }) : 0;
+    token.kind != nk_double_plus ? ({ goto end_postfix; }) : 0;
     lexer_next_token(&token, l, 0);
     make_unary(p, &lhs, ek_incr_post, lhs);
-  }
+    goto begin_loop;
+end_postfix:
   token.kind == nk_term ? print_error(&token, "unexpected end of file") : 0;
   get_prec(&op_prec, token.kind);
   token.kind == term || op_prec < min_prec ? ({ goto end_loop; }) : 0;
