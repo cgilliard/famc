@@ -91,6 +91,7 @@ enum expression_kind
   ek_deref,
   ek_address,
   ek_incr_pre,
+  ek_incr_post,
   ek_ident,
   ek_str_lit,
   ek_num_lit,
@@ -820,6 +821,7 @@ node_display(char** result, enum node_kind kind, void* node_data)
                 struct expression_data* ed = node_data;
                 ed->kind == ek_deref       ? "deref expr"
                          : ed->kind == ek_incr_pre  ? "increment (pre) expr"
+			 : ed->kind == ek_incr_post ? "increment (post) expr"
                          : ed->kind == ek_address   ? "address expr"
                          : ed->kind == ek_negate    ? "negate expr"
                          : ed->kind == ek_ident     ? "ident expr"
@@ -945,7 +947,7 @@ get_prec(long* prec, enum node_kind kind)
 
   *prec = kind == nk_comma                           ? 1
           : kind == nk_equal                         ? 2
-	  : kind == nk_questionmark                  ? 3
+          : kind == nk_questionmark                  ? 3
           : kind == nk_double_pipe                   ? 4
           : kind == nk_double_ampersand              ? 5
           : kind == nk_double_equal || kind == nk_ne ? 6
@@ -1303,7 +1305,12 @@ parse_expression(struct node** result,
                            : print_error(&token, "unexpected token");
 
 begin_loop:
-  lexer_next_token(&token, l, 1);
+  while (1) {
+    lexer_next_token(&token, l, 1);
+    token.kind != nk_double_plus ? ({ break; }) : 0;
+    lexer_next_token(&token, l, 0);
+    make_unary(p, &lhs, ek_incr_post, lhs);
+  }
   token.kind == nk_term ? print_error(&token, "unexpected end of file") : 0;
   get_prec(&op_prec, token.kind);
   token.kind == term || op_prec < min_prec ? ({ goto end_loop; }) : 0;
