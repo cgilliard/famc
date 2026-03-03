@@ -198,6 +198,23 @@ struct parser
   struct node* root;
 };
 
+struct symbol
+{
+  struct source_location loc;
+  long size;
+  long offset;
+  long scope_depth;
+  enum type_kind tkind;
+  struct symbol* next;
+  struct symbol* next_in_scope;
+};
+
+struct hashtable
+{
+  long bucket_count;
+  struct symbol** buckets;
+};
+
 enum gen_state
 {
   gen_state_base,
@@ -442,6 +459,48 @@ end:
   neg ? (*--p = *"-") : 0;
   len = (buf + 20) - p;
   write(&written, fd, p, len);
+}
+
+void
+hashtable_hash(long* ret, long hash_bucket_count, long key)
+{
+  long h;
+  h = key * 0x9E3779B97F4A7C15;
+  *ret = h & (hash_bucket_count - 1);
+}
+
+void
+hashtable_get(struct symbol** ret,
+              struct hashtable* h,
+              long off,
+              long scope_depth)
+{
+  long bucket;
+  struct symbol* ent;
+  hashtable_hash(&bucket, h->bucket_count, off);
+  ent = h->buckets[bucket];
+begin:
+  !ent ? ({ goto end; }) : 0;
+  ent->loc.off == off && ent->scope_depth <= scope_depth ? ({
+    *ret = ent;
+    goto end_fn;
+  })
+                                                         : ({
+                                                             ent = ent->next;
+                                                             goto begin;
+                                                           });
+end:
+  *ret = 0;
+end_fn:;
+}
+
+void
+hashtable_put(struct hashtable* h, struct symbol* sym)
+{
+  long bucket;
+  hashtable_hash(&bucket, h->bucket_count, sym->loc.off);
+  sym->next = h->buckets[bucket];
+  h->buckets[bucket] = sym;
 }
 
 void
@@ -1632,7 +1691,7 @@ gen_node(struct gen* g, struct parser* p, struct node* n, long fd)
 
           cmemcpy(g->out + g->offset, p->in + n->loc.off, n->loc.len);
           g->offset = g->offset + n->loc.len;
-          s = ":\n    push %rbp\n    mov %rsp, %rbp\n    sub $64, %rsp\n\n";
+          s = ":\n    push %rbp\n    mov %rsp, %rbp\n\n";
           cstrlen(&len, s);
           cmemcpy(g->out + g->offset, s, len);
           g->offset = g->offset + len;
