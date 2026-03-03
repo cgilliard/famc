@@ -825,7 +825,7 @@ node_display(char** result, enum node_kind kind, void* node_data)
                 struct expression_data* ed;
                 ed = node_data;
                 ed->kind == ek_deref         ? "deref expr"
-  : ed->kind == ek_incr_pre    ? "increment (pre) expr"
+                         : ed->kind == ek_incr_pre    ? "increment (pre) expr"
                          : ed->kind == ek_incr_post   ? "increment (post) expr"
                          : ed->kind == ek_decr_pre    ? "decrement (pre) expr"
                          : ed->kind == ek_decr_post   ? "decrement (post) expr"
@@ -864,7 +864,6 @@ node_display(char** result, enum node_kind kind, void* node_data)
               })
                                        : "unknown";
 }
-
 
 void
 write_type(long fd, struct type_data* td)
@@ -1268,7 +1267,6 @@ parse_fn_call_expr(struct node** result,
   lexer_next_token(&token, l, 0);
 }
 
-
 void
 parse_expression(struct node** result,
                  struct parser* p,
@@ -1291,32 +1289,26 @@ parse_expression(struct node** result,
   token.kind == nk_asterisk       ? ({
     parse_expression(&child, p, l, 100, term);
     make_unary(p, &lhs, ek_deref, child);
-    goto begin_loop;
   })
   : token.kind == nk_ampersand    ? ({
       parse_expression(&child, p, l, 100, term);
       make_unary(p, &lhs, ek_address, child);
-      goto begin_loop;
     })
   : token.kind == nk_double_plus  ? ({
       parse_expression(&child, p, l, 100, term);
       make_unary(p, &lhs, ek_incr_pre, child);
-      goto begin_loop;
     })
   : token.kind == nk_double_minus ? ({
       parse_expression(&child, p, l, 100, term);
       make_unary(p, &lhs, ek_decr_pre, child);
-      goto begin_loop;
     })
   : token.kind == nk_minus        ? ({
       parse_expression(&child, p, l, 100, term);
       make_unary(p, &lhs, ek_negate, child);
-      goto begin_loop;
     })
   : token.kind == nk_bang         ? ({
       parse_expression(&child, p, l, 100, term);
       make_unary(p, &lhs, ek_not, child);
-      goto begin_loop;
     })
   : token.kind == nk_sizeof       ? ({
       struct node* sz;
@@ -1324,7 +1316,6 @@ parse_expression(struct node** result,
       parse_type(&sz, p, l, 0);
       lexer_next_token(&token, l, 0);
       make_unary(p, &lhs, ek_sizeof, sz);
-      goto begin_loop;
     })
   : token.kind == nk_left_paren   ? ({
       lexer_next_token(&token, l, 1);
@@ -1341,15 +1332,13 @@ parse_expression(struct node** result,
             parse_expression(&lhs, p, l, 0, nk_right_paren);
             lexer_next_token(&token, l, 0);
           });
-      goto begin_loop;
     })
   : token.kind == nk_left_brace   ? ({
       l->off = off;
       parse_statements(&lhs, p, l);
-      goto begin_loop;
     })
-                                  : 0;
-  token.kind == nk_str_lit ? make_terminal_expr(p, &lhs, ek_str_lit, &token.loc)
+  : token.kind == nk_str_lit
+    ? make_terminal_expr(p, &lhs, ek_str_lit, &token.loc)
   : token.kind == nk_num_lit
     ? make_terminal_expr(p, &lhs, ek_num_lit, &token.loc)
   : token.kind == nk_ident ? ({
