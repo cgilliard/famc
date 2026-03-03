@@ -1597,34 +1597,123 @@ end:;
 void
 gen_node(struct gen* g, struct parser* p, struct node* n, long fd)
 {
-  long r;
   struct node* child;
+  long v;
   child = n->first_child;
-  n->kind == nk_asm ? g->state = gen_state_asm
+  v = n->kind == nk_asm                                                    ? ({
+    g->state = gen_state_asm;
+    0;
+  })
+      : (n->kind == nk_right_paren) && (g->state == gen_state_asm)         ? ({
+          g->state = gen_state_base;
+          0;
+        })
+      : n->kind == nk_str_lit && g->state == gen_state_asm                 ? ({
+          cmemcpy(g->out + g->offset, p->in + n->loc.off + 1, n->loc.len - 4);
+          g->out[g->offset + n->loc.len - 4] = *"\n";
+          g->offset = g->offset + n->loc.len - 3;
+          0;
+        })
+      : n->kind == nk_func_decl && n->last_child->kind == nk_compound_stmt ? ({
+          char* s;
+          long len;
+          long params;
+          struct node* ptr;
 
-  : n->kind == nk_right_paren&& g->state == gen_state_asm
-    ? g->state = gen_state_base
-  : n->kind == nk_str_lit && g->state == gen_state_asm                 ? ({
-      cmemcpy(g->out + g->offset, p->in + n->loc.off + 1, n->loc.len - 4);
-      g->out[g->offset + n->loc.len - 4] = *"\n";
-      g->offset = g->offset + n->loc.len - 3;
-    })
-  : n->kind == nk_func_decl && n->last_child->kind == nk_compound_stmt ? ({
-      cmemcpy(g->out + g->offset, p->in + n->loc.off, n->loc.len);
-      cmemcpy(g->out + g->offset + n->loc.len, ":\njmp ", 6);
-      cmemcpy(
-        g->out + g->offset + n->loc.len + 6, p->in + n->loc.off, n->loc.len);
-      g->out[g->offset + n->loc.len + 6 + n->loc.len] = *"\n";
-      g->offset = g->offset + n->loc.len * 2 + 6 + 1;
-    })
-                                                                       : 0;
-  (void)r;
+          ptr = n->first_child;
+          params = 0;
+        begin:
+          !ptr ? ({ goto end; }) : 0;
+          ptr = ptr->next_sibling;
+          params++;
+          goto begin;
+        end:
+          params ? params-- : 0;
+
+          cmemcpy(g->out + g->offset, p->in + n->loc.off, n->loc.len);
+          g->offset = g->offset + n->loc.len;
+          s = ":\n    push %rbp\n    mov %rsp, %rbp\n    sub $64, %rsp\n\n";
+          cstrlen(&len, s);
+          cmemcpy(g->out + g->offset, s, len);
+          g->offset = g->offset + len;
+
+          params >= 1 ? ({
+            s = "    mov    %rdi, -8(%rbp)\n";
+            cstrlen(&len, s);
+            cmemcpy(g->out + g->offset, s, len);
+            g->offset = g->offset + len;
+          })
+                      : 0;
+          params >= 2 ? ({
+            s = "    mov    %rsi, -16(%rbp)\n";
+            cstrlen(&len, s);
+            cmemcpy(g->out + g->offset, s, len);
+            g->offset = g->offset + len;
+          })
+                      : 0;
+          params >= 3 ? ({
+            s = "    mov    %rdx, -24(%rbp)\n";
+            cstrlen(&len, s);
+            cmemcpy(g->out + g->offset, s, len);
+            g->offset = g->offset + len;
+          })
+                      : 0;
+          params >= 4 ? ({
+            s = "    mov    %rcx, -32(%rbp)\n";
+            cstrlen(&len, s);
+            cmemcpy(g->out + g->offset, s, len);
+            g->offset = g->offset + len;
+          })
+                      : 0;
+          params >= 5 ? ({
+            s = "    mov    %r8,  -40(%rbp)\n";
+            cstrlen(&len, s);
+            cmemcpy(g->out + g->offset, s, len);
+            g->offset = g->offset + len;
+          })
+                      : 0;
+
+          params >= 6 ? ({
+            s = "    mov    %r9,  -48(%rbp)\n";
+            cstrlen(&len, s);
+            cmemcpy(g->out + g->offset, s, len);
+            g->offset = g->offset + len;
+          })
+                      : 0;
+
+          cmemcpy(g->out + g->offset, p->in + n->loc.off, n->loc.len);
+          g->offset = g->offset + n->loc.len;
+          cmemcpy(g->out + g->offset, "1:\n", 3);
+          g->offset = g->offset + 3;
+
+
+          cmemcpy(g->out + g->offset, "\n    jmp ", 9);
+          g->offset = g->offset + 9;
+          cmemcpy(g->out + g->offset, p->in + n->loc.off, n->loc.len);
+          g->offset = g->offset + n->loc.len;
+          cmemcpy(g->out + g->offset, "1\n\n", 3);
+          g->offset = g->offset + 3;
+          0;
+        })
+                                                                           : 0;
+  (void)v;
 begin_child:
   child ? 0 : ({ goto end_child; });
   gen_node(g, p, child, fd);
   child = child->next_sibling;
   goto begin_child;
 end_child:;
+
+  n->kind == nk_func_decl && n->last_child->kind == nk_compound_stmt ? ({
+    char* s;
+    long len;
+    s = "    leave\n    ret\n";
+    cstrlen(&len, s);
+    cmemcpy(g->out + g->offset, s, len);
+    g->offset = g->offset + len;
+    0;
+  })
+                                                                     : 0;
 }
 
 void
