@@ -1686,7 +1686,6 @@ gen_node(struct gen* g, struct parser* p, struct node* n, long fd)
           cmemcpy(g->out + g->offset, "1:\n", 3);
           g->offset = g->offset + 3;
 
-
           cmemcpy(g->out + g->offset, "\n    jmp ", 9);
           g->offset = g->offset + 9;
           cmemcpy(g->out + g->offset, p->in + n->loc.off, n->loc.len);
@@ -1696,7 +1695,6 @@ gen_node(struct gen* g, struct parser* p, struct node* n, long fd)
           0;
         })
                                                                            : 0;
-  (void)v;
 begin_child:
   child ? 0 : ({ goto end_child; });
   gen_node(g, p, child, fd);
@@ -1704,7 +1702,7 @@ begin_child:
   goto begin_child;
 end_child:;
 
-  n->kind == nk_func_decl && n->last_child->kind == nk_compound_stmt ? ({
+  v = n->kind == nk_func_decl && n->last_child->kind == nk_compound_stmt ? ({
     char* s;
     long len;
     s = "    leave\n    ret\n";
@@ -1713,7 +1711,8 @@ end_child:;
     g->offset = g->offset + len;
     0;
   })
-                                                                     : 0;
+                                                                         : 0;
+  (void)v;
 }
 
 void
