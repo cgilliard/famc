@@ -198,6 +198,19 @@ struct parser
   struct node* root;
 };
 
+enum gen_state
+{
+  gen_state_base,
+  gen_state_asm
+};
+
+struct gen
+{
+  enum gen_state state;
+  char* out;
+  long offset;
+};
+
 __asm__(".section .text\n"
         ".global _start\n"
         "_start:\n"
@@ -261,6 +274,12 @@ lseek(long* ret, long fd, long offset, long whence)
 }
 
 void
+ftruncate(long* ret, long fd, long len)
+{
+  syscall(ret, 77, fd, len, 0, 0, 0, 0);
+}
+
+void
 mmap(void** ret,
      void* addr,
      long length,
@@ -295,6 +314,21 @@ loop:
   goto loop;
 end:
   *ret = x - y;
+}
+
+void
+cmemcpy(void* dst, void* src, long n)
+{
+  char* s;
+  char* d;
+  s = src;
+  d = dst;
+begin:
+  n <= 0 ? ({ goto end; }) : 0;
+  *d++ = *s++;
+  n--;
+  goto begin;
+end:;
 }
 
 void
@@ -351,6 +385,15 @@ fmap_ro(void** ret, long fd, long size, long offset)
 {
   long tmp;
   mmap(ret, 0, size, 1, 1, fd, offset);
+  tmp = (long)*ret;
+  tmp < 0 && tmp >= -4095 ? * ret = 0 : 0;
+}
+
+void
+fmap_rw(void** ret, long fd, long size, long offset)
+{
+  long tmp;
+  mmap(ret, 0, size, 3, 1, fd, offset);
   tmp = (long)*ret;
   tmp < 0 && tmp >= -4095 ? * ret = 0 : 0;
 }
@@ -1552,6 +1595,61 @@ end:;
 }
 
 void
+gen_node(struct gen* g, struct parser* p, struct node* n, long fd)
+{
+  long r;
+  struct node* child;
+  child = n->first_child;
+  n->kind == nk_asm ? g->state = gen_state_asm
+
+  : n->kind == nk_right_paren&& g->state == gen_state_asm
+    ? g->state = gen_state_base
+  : n->kind == nk_str_lit && g->state == gen_state_asm                 ? ({
+      cmemcpy(g->out + g->offset, p->in + n->loc.off + 1, n->loc.len - 4);
+      g->out[g->offset + n->loc.len - 4] = *"\n";
+      g->offset = g->offset + n->loc.len - 3;
+    })
+  : n->kind == nk_func_decl && n->last_child->kind == nk_compound_stmt ? ({
+      cmemcpy(g->out + g->offset, p->in + n->loc.off, n->loc.len);
+      cmemcpy(g->out + g->offset + n->loc.len, ":\njmp ", 6);
+      cmemcpy(
+        g->out + g->offset + n->loc.len + 6, p->in + n->loc.off, n->loc.len);
+      g->out[g->offset + n->loc.len + 6 + n->loc.len] = *"\n";
+      g->offset = g->offset + n->loc.len * 2 + 6 + 1;
+    })
+                                                                       : 0;
+  (void)r;
+begin_child:
+  child ? 0 : ({ goto end_child; });
+  gen_node(g, p, child, fd);
+  child = child->next_sibling;
+  goto begin_child;
+end_child:;
+}
+
+void
+code_gen(struct parser* p, char* path)
+{
+  long fd;
+  long r;
+  long max_size;
+  struct gen g;
+
+  max_size = 1024 * 1024 * 1024;
+
+  open(&fd, path, 0102, 0644);
+  fd < 0 ? panic("Could not open output file!") : 0;
+  ftruncate(&r, fd, max_size);
+  r < 0 ? panic("could not resize output file!") : 0;
+
+  g.state = gen_state_base;
+  g.offset = 0;
+  fmap_rw((void*)&g.out, fd, max_size, 0);
+  gen_node(&g, p, p->root, fd);
+  ftruncate(&r, fd, g.offset);
+}
+
+void
 cmain(long argc, char** argv)
 {
   long fd;
@@ -1582,6 +1680,8 @@ cmain(long argc, char** argv)
   parse(&p, &l);
   debug ? node_print(&p, p.root) : 0;
   debug ? write_str(1, "success!\n") : 0;
+  code_gen(&p, "out.S");
+
   exit_group(0);
 }
 
