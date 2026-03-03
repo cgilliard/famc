@@ -250,9 +250,9 @@ syscall(long* result,
         long r6);
 
 void
-exit_group(long status)
+_exit(long status)
 {
-  syscall(&status, 231, status, 0, 0, 0, 0, 0);
+  syscall(&status, 60, status, 0, 0, 0, 0, 0);
 }
 
 void
@@ -405,7 +405,7 @@ panic(char* msg)
   cstrlen(&r, msg);
   write(&r, 2, msg, r);
   write(&r, 2, "\n", 1);
-  exit_group(-1);
+  _exit(-1);
 }
 
 void
@@ -997,7 +997,7 @@ print_error(struct node* n, char* msg)
     : 0;
   write_str(2, msg);
   write_str(2, "\n");
-  exit_group(-1);
+  _exit(-1);
 }
 
 void
@@ -1771,6 +1771,6 @@ cmain(long argc, char** argv)
   debug ? write_str(1, "success!\n") : 0;
   code_gen(&p, "out.S");
 
-  exit_group(0);
+  _exit(0);
 }
 
