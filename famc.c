@@ -255,12 +255,6 @@ open(long* ret, char* path, long flags, long mode)
 }
 
 void
-close(long* ret, long fd)
-{
-  syscall(ret, 3, fd, 0, 0, 0, 0, 0);
-}
-
-void
 lseek(long* ret, long fd, long offset, long whence)
 {
   syscall(ret, 8, fd, offset, whence, 0, 0, 0);
@@ -1581,7 +1575,6 @@ cmain(long argc, char** argv)
   size < 0 ? panic("Could not determine file size!") : 0;
   fmap_ro((void*)&(&l)->in, fd, size, 0);
   l.in == 0 ? panic("Could not mmap file!") : 0;
-  close(&r, fd);
   arena_init(&p.a, 256 * 1024 * 1024);
   node_init(&p, &p.root, nk_program);
   p.in = l.in;
