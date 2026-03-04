@@ -198,9 +198,16 @@ struct parser
   struct node* root;
 };
 
+enum symbol_kind {
+	sk_param,
+	sk_variable,
+	sk_label
+};
+
 struct symbol
 {
   struct source_location loc;
+  enum symbol_kind kind;
   long size;
   long offset;
   long scope_depth;
